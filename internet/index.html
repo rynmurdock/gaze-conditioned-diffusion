@@ -1,0 +1,365 @@
+
+
+<!-- See the WebGazer directory (above on my local) 
+if/when you run into this file being older or not in the correct location. 
+-->
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Gaze Input</title>
+<script src="https://webgazer.cs.brown.edu/webgazer.js"></script>
+
+<style>
+  :root { color-scheme: dark; }
+  #display {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateZ(0);
+  will-change: contents;
+  backface-visibility: hidden;
+}
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #111;
+    color: #eee;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+  }
+  #status {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    font-size: 14px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.08);
+  }
+  #status.connected { color: #7CFC93; }
+  #status.disconnected { color: #FF8A8A; }
+
+  #instructions {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 15px;
+    opacity: 0.8;
+    text-align: center;
+    max-width: 480px;
+  }
+
+  #startBtn {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    padding: 10px 18px;
+    font-size: 14px;
+    border-radius: 6px;
+    border: none;
+    background: #4FA8FF;
+    color: #111;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  #displayBtn {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    padding: 10px 18px;
+    font-size: 14px;
+    border-radius: 6px;
+    border: none;
+    background: #4FA8FF;
+    color: #111;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #displayBtn:disabled {
+    background: #555;
+    color: #999;
+    cursor: default;
+  }
+  #displayBtn.hidden { display: none; }
+
+  /* Calibration layer: no full-screen background, no pointer-events on the
+     container itself. Only the individual dots are interactive, so this
+     never blocks the video feed, clicks, or the underlying page. */
+  #calibration {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    pointer-events: none;
+  }
+  #calibration.hidden { display: none; }
+
+  .calib-dot {
+    position: absolute;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 80, 80, 0.9);
+    border: 2px solid #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #111;
+    cursor: pointer;
+    pointer-events: auto;
+    box-shadow: 0 0 12px rgba(0,0,0,0.5);
+    transition: background 0.15s ease, transform 0.1s ease;
+    user-select: none;
+  }
+  .calib-dot:active {
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  .calib-dot.done {
+    cursor: default;
+  }
+
+  #calibProgress {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    font-size: 14px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.08);
+    z-index: 501;
+    pointer-events: none; /* never intercept clicks meant for a dot underneath */
+  }
+  #calibProgress.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div id="status" class="disconnected">WebSocket: disconnected</div>
+<button id="startBtn">Start tracking</button>
+<button id="displayBtn" class="hidden" disabled>Start display</button>
+<div id="calibProgress" class="hidden">Calibration: 0/9 points</div>
+
+<div id="instructions">
+  Click "Start tracking" and allow camera access, then look at each dot and click it several times to calibrate.
+</div>
+
+<div id="calibration" class="hidden"></div>
+
+<div id="display"></div>
+
+<script>
+const WS_URL = "ws://localhost:8765";
+
+const statusEl = document.getElementById("status");
+const startBtn = document.getElementById("startBtn");
+const displayBtn = document.getElementById("displayBtn");
+const calibrationEl = document.getElementById("calibration");
+const calibProgressEl = document.getElementById("calibProgress");
+const instructionsEl = document.getElementById("instructions");
+
+let ws = null;
+let tracking = false;
+let currentUrl = null;
+let imgEl = null;
+let displayStarted = false; // gate: ignore incoming frames until "Start display" is clicked
+
+// --- Calibration ---------------------------------------------------------
+
+const CALIBRATION_POINTS = [
+  [5, 5],   [50, 5],  [95, 5],
+  [5, 50],  [50, 50], [95, 50],
+  [5, 95],  [50, 95], [95, 95]
+];
+const CLICKS_PER_POINT = 1;
+let calibrationCounts = [];
+
+function buildCalibrationUI() {
+  calibrationEl.innerHTML = "";
+  calibrationCounts = CALIBRATION_POINTS.map(() => 0);
+
+  CALIBRATION_POINTS.forEach((pt, i) => {
+    const dot = document.createElement("div");
+    dot.className = "calib-dot";
+    dot.style.left = pt[0] + "%";
+    dot.style.top = pt[1] + "%";
+    dot.textContent = CLICKS_PER_POINT;
+    dot.dataset.index = i;
+    dot.addEventListener("click", onCalibDotClick);
+    calibrationEl.appendChild(dot);
+  });
+
+  calibrationEl.classList.remove("hidden");
+  calibProgressEl.classList.remove("hidden");
+  instructionsEl.textContent = "Look at each dot and click it until it turns green.";
+  updateCalibProgress();
+}
+
+function onCalibDotClick(e) {
+  const dot = e.currentTarget;
+  const idx = Number(dot.dataset.index);
+  if (calibrationCounts[idx] >= CLICKS_PER_POINT) return;
+
+  const rect = dot.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+
+  if (window.webgazer) {
+    webgazer.recordScreenPosition(cx, cy, "click");
+  }
+
+  calibrationCounts[idx]++;
+  const remaining = CLICKS_PER_POINT - calibrationCounts[idx];
+  const progress = calibrationCounts[idx] / CLICKS_PER_POINT;
+
+  dot.textContent = remaining > 0 ? remaining : "\u2713";
+  dot.style.background = `rgba(${Math.round(255 * (1 - progress))}, ${Math.round(80 + 140 * progress)}, 80, 0.9)`;
+  if (remaining <= 0) dot.classList.add("done");
+
+  updateCalibProgress();
+}
+
+function updateCalibProgress() {
+  const done = calibrationCounts.filter(c => c >= CLICKS_PER_POINT).length;
+  calibProgressEl.textContent = `Calibration: ${done}/${CALIBRATION_POINTS.length} points`;
+  if (done === CALIBRATION_POINTS.length) finishCalibration();
+}
+
+function finishCalibration() {
+  calibrationEl.classList.add("hidden");
+  calibProgressEl.classList.add("hidden");
+  instructionsEl.textContent = 'Calibration complete. Click "Start display" when ready.';
+  displayBtn.classList.remove("hidden");
+  displayBtn.disabled = false;
+}
+
+// --- WebSocket / display ---------------------------------------------------
+
+function connectWS() {
+  ws = new WebSocket(WS_URL);
+  ws.binaryType = "blob";
+
+  ws.onopen = () => {
+    statusEl.textContent = "WebSocket: connected";
+    statusEl.className = "connected";
+  };
+  ws.onclose = () => {
+    statusEl.textContent = "WebSocket: disconnected (retrying...)";
+    statusEl.className = "disconnected";
+    setTimeout(connectWS, 1500);
+  };
+  ws.onerror = () => ws.close();
+
+  const gazerVideo = document.getElementById('webgazerVideoFeed');
+  if (gazerVideo) {
+    gazerVideo.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
+  }
+  let decoding = false;
+  let pendingBlob = null;
+
+  async function showFrame(blob) {
+    if (decoding) {
+      pendingBlob = blob; // only keep the newest one, discard anything in between
+      return;
+    }
+    decoding = true;
+
+    const url = URL.createObjectURL(blob);
+    const next = new Image();
+    try {
+      next.src = url;
+      await next.decode(); // waits for actual decode completion, not just load event
+
+      const display = document.getElementById("display");
+      display.style.visibility = "visible";
+      statusEl.hidden = true;
+      startBtn.hidden = true;
+      displayBtn.hidden = true;
+
+      if (imgEl) imgEl.remove();
+      next.style.cssText = "position:absolute;inset:0;width:100vw;height:100vh;object-fit:cover;background:black;";
+      display.appendChild(next);
+      imgEl = next;
+
+      if (currentUrl) URL.revokeObjectURL(currentUrl);
+      currentUrl = url;
+    } finally {
+      decoding = false;
+      if (pendingBlob) {
+        const next = pendingBlob;
+        pendingBlob = null;
+        showFrame(next); // pick up whatever arrived while we were busy
+      }
+    }
+  }
+
+  ws.onmessage = (event) => {
+    if (typeof event.data === "string") return;
+    if (!displayStarted) return; // don't collect/decode frames before the user starts display
+    showFrame(event.data);
+  };
+}
+
+function sendGaze(x, y) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      x,
+      y,
+      width: window.innerWidth,
+      height: window.innerHeight,
+      t: performance.timeOrigin / 1000 + performance.now() / 1000
+    }));
+  }
+}
+
+displayBtn.addEventListener("click", () => {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  displayStarted = true;
+  ws.send(JSON.stringify({ type: "start_display" }));
+  displayBtn.disabled = true;
+  displayBtn.textContent = "Displaying...";
+});
+
+startBtn.addEventListener("click", async () => {
+  if (tracking) return;
+  tracking = true;
+  startBtn.disabled = true;
+  startBtn.textContent = "Tracking...";
+
+  connectWS();
+
+  await webgazer
+    .setRegression("ridge")
+    .setGazeListener((data) => {
+      if (!data) return;
+      sendGaze(data.x, data.y);
+    })
+    .saveDataAcrossSessions(false)
+    .begin();
+
+  webgazer.showVideoPreview(false).showPredictionPoints(false).showFaceOverlay(false).showFaceFeedbackBox(false);
+  webgazer.removeMouseEventListeners(); // stop treating cursor position as gaze ground-truth
+
+  startBtn.style.display = "none";
+  buildCalibrationUI();
+});
+</script>
+</body>
+</html>

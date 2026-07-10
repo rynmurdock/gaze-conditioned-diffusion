@@ -1,0 +1,17 @@
+gradio
+numpy
+scikit-learn
+pandas
+torch
+torchvision
+matplotlib
+diffusers
+accelerate
+transformers
+sentencepiece
+peft
+imageio
+apscheduler
+av
+mat-io
+websockets>=12.0
