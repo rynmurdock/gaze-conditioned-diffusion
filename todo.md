@@ -19,8 +19,10 @@
 [] klein keep-distill training (https://arxiv.org/abs/2605.05204)
     [] https://huggingface.co/blog/black-forest-labs/flux-2-klein-lora
     [] ensure we can load klein & lora/finetune/etc. *period*.
+    [] remove text experts?
+    [] cache teacher outputs
     [] could enforce a maximum number of points on the scanpath?
-      [] though it's just RoPE values, so not a compute optimization.
+      [] it's just RoPE values, so not a compute optimization.
     [] patch pipe and setup qual eval (search notimplementederror)
-    [] ckpt loading (see other notimplementederror)
-    [] condition on gaze sequence instead of just points
+    [x] ckpt loading (see other notimplementederror)
+    [] condition on scanpath instead of just points

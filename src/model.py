@@ -3,6 +3,7 @@ import torch
 import logging
 
 from diffusers import Flux2KleinPipeline
+from modded_klein import Flux2Transformer2DModel
 
 
 def get_loss(model, x0, scanpaths):
@@ -74,7 +75,7 @@ class Zoo(torch.nn.Module):
                 hidden_states=latents,  # (B, image_seq_len, C)
                 timestep=timesteps / 1000,
                 guidance=None,
-                encoder_hidden_states=prompt_embeds,
+                encoder_hidden_states=None,
                 txt_ids=latents.new_zeros(len(latents), 1, 4),  # B, text_seq_len, 4
                 img_ids=latents.new_zeros(
                                     len(latents), 
@@ -86,36 +87,41 @@ class Zoo(torch.nn.Module):
     
     @torch.no_grad()
     def do_quant_val(self, val_dataloader, max_val_steps):
-        losses = []
-        for index, batch in enumerate(val_dataloader):
-            if batch is None:
-                continue
+        # fork_rng temporarily isolates changes
+        with torch.random.fork_rng():
+            # You can change the seed here locally
+            torch.manual_seed(self.seed)
 
-            x0, scanpaths = batch['images'], batch['scanpaths']
-            print('device',self.device)
-            print('device',self.dtype)
-            x0 = x0.to(self.device)
-            scanpaths = scanpaths.to(self.device)
-            loss, loss_logging_dict = get_loss(self, 
-                                               x0, scanpaths)
-            losses.append(loss.item())
-            if index > max_val_steps:
-                return sum(losses) / len(losses)        
-        return sum(losses) / len(losses)
+            losses = []
+            for index, batch in enumerate(val_dataloader):
+                if batch is None:
+                    continue
+
+                x0, scanpaths = batch['images'], batch['scanpaths']
+                print('device',self.device)
+                print('device',self.dtype)
+                x0 = x0.to(self.device)
+                scanpaths = scanpaths.to(self.device)
+                loss, loss_logging_dict = get_loss(self, 
+                                                x0, scanpaths)
+                losses.append(loss.item())
+                if index > max_val_steps:
+                    return sum(losses) / len(losses)        
+            return sum(losses) / len(losses)
     
-def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
-    if path:
-        raise(NotImplementedError((
-            'We haven"t added ckpt loading yet but can by'
-            'loading the transformer from_pretrained & passing it to the pipe'
-        )))
-    
+def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):    
+    transformer = Flux2Transformer2DModel.from_pretrained("black-forest-labs/FLUX.2-klein-4B" if path is None
+                                                           else path, subfolder='transformer',
+                                                           strict=False)
     pipe = Flux2KleinPipeline.from_pretrained("black-forest-labs/FLUX.2-klein-4B", 
+                                              transformer=transformer,
                                               # full precision weights
                                               torch_dtype=torch.float32
                                               ).to('cpu')
     # TODO assert transformer dtype
     transformer = pipe.transformer.to(device)
+    if config.activation_checkpointing:
+        transformer.enable_gradient_checkpointing()
     vae = pipe.vae.to(device, dtype)
     # NOTE we don't condition on text here
     del pipe.text_encoder

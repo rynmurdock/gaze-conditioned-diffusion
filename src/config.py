@@ -27,6 +27,7 @@ class Config:
     
     # specifically for *mixed precision*
     dtype: torch.dtype = field(default=torch.bfloat16, repr=False)
+    activation_checkpointing: bool = True
     seed: int = 107
 
     # Data

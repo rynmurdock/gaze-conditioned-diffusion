@@ -30,8 +30,15 @@ def main(config):
     torch.manual_seed(config.seed)
 
     model = get_model_and_tokenizer(config.model_path, config.device, config.dtype, config.seed, config.do_compile, config)
-    optimizer, lr_sched = get_optimizer_and_lr_sched(list(model.pipe.transformer.parameters()), 
+
+    # grab attn linears
+    trained_params = [p for n, p in model.pipe.transformer.named_parameters() if 'to_q' in n]
+    not_trained = [p for n, p in model.pipe.transformer.named_parameters() if 'to_q' in n]
+    optimizer, lr_sched = get_optimizer_and_lr_sched(trained_params, 
                                                      config.lr)
+    for p in not_trained:
+        p.requires_grad = False
+    
     dataloader, val_dataloader = get_dataloader(config.data_path, config.val_data_split_ratio,
                                                  config.batch_size, config.num_workers, config.seed)
     
@@ -92,7 +99,6 @@ def main(config):
 
             total_inds += 1
             if total_inds % config.freq == 0:
-                # TODO add loading from path
                 model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', from_pt=True)
 
 if __name__ == '__main__':
