@@ -3,7 +3,7 @@ import torch
 import logging
 
 from diffusers import Flux2KleinPipeline
-from modded_klein import Flux2Transformer2DModel
+from modded_klein import Flux2Transformer2DModel, prepare_image_ids
 
 
 def get_loss(model, x0, scanpaths):
@@ -59,7 +59,7 @@ class Zoo(torch.nn.Module):
         generator = torch.Generator(device="cpu").manual_seed(self.seed)
 
         images = self.pipe(
-            fixations=torch.randint(placehod),
+            scanpath=torch.randint(0, 10, (5,)).to('cuda'),
             num_inference_steps=50,
             guidance_scale=8,
             generator=generator
@@ -68,6 +68,8 @@ class Zoo(torch.nn.Module):
         return images
     
     def forward(self, latents, scanpath, timesteps):
+        gaze_image_ids = prepare_image_ids([latents], scanpath)
+
         # three layers from qwen3 = 3x2560 on actual inner dim
         prompt_embeds = latents.new_zeros(1, 1, 7680)
         logging.warning('We aren"t using scanpath yet!')
@@ -77,9 +79,7 @@ class Zoo(torch.nn.Module):
                 guidance=None,
                 encoder_hidden_states=None,
                 txt_ids=latents.new_zeros(len(latents), 1, 4),  # B, text_seq_len, 4
-                img_ids=latents.new_zeros(
-                                    len(latents), 
-                                    latents.shape[1], 4),  # B, image_seq_len, 4
+                img_ids=gaze_image_ids,  # B, image_seq_len, 4
                 return_dict=False,
         )[0]
         return velocity

@@ -138,7 +138,7 @@ class ScanpathDataset(Dataset):
 
 def collate_scanpaths(batch):
     """
-    Zero-pads variable-length scanpaths to the batch max so they can be
+    negative-one-pads variable-length scanpaths to the batch max so they can be
     stacked. Also returns true lengths for masking / pack_padded_sequence.
     """
     images = torch.stack([b["image"] for b in batch], dim=0)
@@ -146,7 +146,7 @@ def collate_scanpaths(batch):
     n_coords = batch[0]["scanpath"].shape[1]
     t_max = int(lengths.max().item())
 
-    scanpaths = torch.zeros(len(batch), t_max, n_coords, dtype=torch.float32)
+    scanpaths = -1 * torch.ones(len(batch), t_max, n_coords, dtype=torch.float32)
     for i, b in enumerate(batch):
         n = b["scanpath"].shape[0]
         scanpaths[i, :n] = b["scanpath"]
@@ -199,7 +199,8 @@ if __name__ == "__main__":
     batch = next(iter(loader))
     print("images:   ", batch["images"].shape)      # (8, 3, 256, 256)
     print("scanpaths:", batch["scanpaths"].shape)   # (8, T_max, 2 or 3)
+    print("scanpaths:", batch["scanpaths"][0])   # (Ex. first in batch)
     print("lengths:  ", batch["lengths"])
     print("stimuli:  ", batch["stim_names"])
 
-# TODO logging.info here
+# TODO logging.infos

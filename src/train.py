@@ -102,4 +102,6 @@ def main(config):
                 model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', from_pt=True)
 
 if __name__ == '__main__':
+    assert main_config.batch_size == 1, 'we"ll need batched RoPE for higher batch size'
     main(main_config)
+

@@ -50,6 +50,76 @@ from diffusers.models.normalization import AdaLayerNormContinuous
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
+def prepare_image_ids(
+        image_latents: list[torch.Tensor],  # [(1, C, H, W), (1, C, H, W), ...]
+        scale: int = 10,
+        scanpath: list = [],
+    ):
+        r"""
+        Generates 4D time-space coordinates (T, H, W, L) for a sequence of image latents.
+
+        This function creates a unique coordinate for every pixel/patch across all input latent with different
+        dimensions.
+
+        Args:
+            image_latents (list[torch.Tensor]):
+                A list of image latent feature tensors, typically of shape (C, H, W).
+            scale (int, optional):
+                A factor used to define the time separation (T-coordinate) between latents. T-coordinate for the i-th
+                latent is: 'scale + scale * i'. Defaults to 10.
+            scanpath (list):
+                A list of fixations points (each x and y), not scaled for our latent downsampling
+                    by the VAE
+
+        Returns:
+            torch.Tensor:
+                The combined coordinate tensor. Shape: (1, N_total, 4) Where N_total is the sum of (H * W) for all
+                input latents.
+
+        Coordinate Components (Dimension 4):
+            - T (Time): The unique index indicating which latent image the coordinate belongs to.
+            - H (Height): The row index within that latent image.
+            - W (Width): The column index within that latent image.
+            - L (Seq. Length): A sequence length dimension, which would always fixed at 0 (size 1)
+                                but we use it for our fixation points.
+        """
+
+        if not isinstance(image_latents, list):
+            image_latents = [image_latents]
+
+        # create time offset for each reference image
+        t_coords = [scale + scale * t for t in torch.arange(0, len(image_latents))]
+        t_coords = [t.view(-1) for t in t_coords]
+
+        rescaled_scanpaths = [(n[0]//16, n[1]//16) for n in scanpath]
+
+        image_latent_ids = []
+        for x, t in zip(image_latents, t_coords):
+            x = x.squeeze(0)
+            _, height, width = x.shape
+
+            x_ids = torch.cartesian_prod(t, torch.arange(height), torch.arange(width), torch.range(1, 1).long())
+            image_latent_ids.append(x_ids)
+
+        image_latent_ids = torch.cat(image_latent_ids, dim=0)
+
+        scanpath_ns = torch.zeros_like(image_latent_ids)[:, -1]
+        # scanpath is ordered so ind gives us their "when"
+        for ind, scanpath_xy in enumerate(rescaled_scanpaths):
+            x, y = scanpath_xy
+            if x == -1 and y == -1:
+                continue
+            if y * width + x < scanpath_ns.shape[1]:
+                scanpath_ns[y * width + x] = (ind + 1) * 5
+                logging.info(f'Added scan path')
+            else:
+                logging.warning(f'Scanpath includes ({x},{y}) so fall outside stimulus')
+
+        image_latent_ids[:, -1] = scanpath_ns
+        image_latent_ids = image_latent_ids.unsqueeze(0)
+
+        return image_latent_ids
+
 @dataclass
 class Flux2Transformer2DModelOutput(BaseOutput):
     """
@@ -1281,6 +1351,7 @@ class Flux2Transformer2DModel(
 
         # 3. Calculate RoPE embeddings from image and text tokens
         if img_ids.ndim == 3:
+            assert False, 'we don"t support batched inputs right now.'
             img_ids = img_ids[0]
         if txt_ids.ndim == 3:
             txt_ids = txt_ids[0]

@@ -25,4 +25,4 @@
       [] it's just RoPE values, so not a compute optimization.
     [] patch pipe and setup qual eval (search notimplementederror)
     [x] ckpt loading (see other notimplementederror)
-    [] condition on scanpath instead of just points
+    [x] condition on scanpath (not just fixation points)
