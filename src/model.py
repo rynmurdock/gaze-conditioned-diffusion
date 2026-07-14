@@ -6,7 +6,8 @@ from pipe_modded_klein import Flux2KleinPipeline
 from modded_klein import Flux2Transformer2DModel, prepare_image_ids
 
 
-def get_loss(model, image, scanpaths):
+def get_loss(model, image, scanpaths, dtype=None):
+    dtype = model.dtype if not dtype else dtype
     with torch.no_grad():
         # rng drop out inputs
         # TODO set drop rate into model from config
@@ -15,7 +16,9 @@ def get_loss(model, image, scanpaths):
         # so we don't do attention mask / padding to largest
         scanpaths[zeroing_mask] = 0
 
+        # we load pre-encoded images
         x0 = model.pipe._encode_vae_image(image, None)
+
         gaze_image_ids = prepare_image_ids([x0], scanpaths)
         x0 = model.pipe._pack_latents(x0)
 
@@ -26,7 +29,7 @@ def get_loss(model, image, scanpaths):
         sigma = timestep / 1000
         latent = sigma * noise + (1 - sigma) * x0
     
-    with torch.autocast(device_type='cuda', enabled=True, dtype=model.dtype):
+    with torch.autocast(device_type='cuda', enabled=True, dtype=dtype):
         output = model(latent, 
                        timesteps=timestep, gaze_image_ids=gaze_image_ids,
                        )
@@ -64,6 +67,7 @@ class Zoo(torch.nn.Module):
 
     @torch.no_grad()
     def do_qual_val(self,):
+        return
         generator = torch.Generator(device="cpu").manual_seed(self.seed)
 
         images = self.pipe(
@@ -78,7 +82,7 @@ class Zoo(torch.nn.Module):
         return images
     
     @torch.no_grad()
-    def do_quant_val(self, val_dataloader, max_val_steps):
+    def do_quant_val(self, val_dataloader, max_val_steps, dtype):
         # fork_rng temporarily isolates changes
         with torch.random.fork_rng():
             # You can change the seed here locally
@@ -90,15 +94,15 @@ class Zoo(torch.nn.Module):
                     continue
 
                 x0, scanpaths = batch['images'], batch['scanpaths']
-                x0 = x0.to(self.device)
+                x0 = x0.to(self.device, dtype)
                 scanpaths = scanpaths.to(self.device)
                 loss, loss_logging_dict = get_loss(self, 
-                                                x0, scanpaths)
+                                                x0, scanpaths, )
                 losses.append(loss.item())
                 if index > max_val_steps:
-                    return sum(losses) / len(losses)        
+                    return sum(losses) / len(losses)
             return sum(losses) / len(losses)
-    
+
 def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):    
     transformer = Flux2Transformer2DModel.from_pretrained("black-forest-labs/FLUX.2-klein-4B" if path is None
                                                            else path, subfolder='transformer',
@@ -112,19 +116,19 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
     transformer = pipe.transformer.to(device)
     if config.activation_checkpointing:
         transformer.enable_gradient_checkpointing()
-    vae = pipe.vae.to(device, dtype)
+
+    pipe.vae = pipe.vae.to(device, dtype)
     # NOTE we don't condition on text here
     del pipe.text_encoder
 
     if do_compile:
         transformer = torch.compile(transformer)
-        vae = torch.compile(vae)
     
     model = Zoo(pipe, config.device, config.dtype, seed).to(device)
     return model
 
 def get_optimizer_and_lr_sched(params, lr):
     logging.info(f'Training: {params}')
-    optimizer = torch.optim.AdamW(params, lr=lr)
+    optimizer = torch.optim.SGD(params, lr=lr)
     scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=.5, end_factor=1, total_iters=1)
     return optimizer, scheduler

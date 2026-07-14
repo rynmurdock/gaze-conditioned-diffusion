@@ -175,11 +175,13 @@ def collate_scanpaths(batch):
         scanpaths[i, :n] = b["scanpath"]
 
     stim_names = [b["stim_name"] for b in batch]
+    pil_images = [b["pil_img"] for b in batch]
     return {
         "images": images,          # (B, 3, H, W)
         "scanpaths": scanpaths,    # (B, T_max, C), zero-padded past `lengths`
         "lengths": lengths,        # (B,)
         "stim_names": stim_names,
+        "pil_images": pil_images,
     }
 
 def get_dataloader(

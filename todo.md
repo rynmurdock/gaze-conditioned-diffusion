@@ -20,10 +20,12 @@
     [x] ensure we can load klein & lora/finetune/etc. *period*.
     [x] remove text experts
     [] cache teacher outputs
+      [] vae latents saved as tensor with mapping from images
     - could enforce a maximum number of points on the scanpath?
       [x] it's just RoPE values, so not a compute optimization.
     [x] patch pipe and setup qual eval
     [x] ckpt loading (see other notimplementederror)
     [x] condition on scanpath (not just fixation points)
+    [] will likely need LoRA / similar
 
 

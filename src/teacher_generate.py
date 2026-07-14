@@ -34,9 +34,11 @@ def main(config):
 
     for epoch in range(config.epochs):
         for ind, batch in tqdm(enumerate(iter(dataloader))):
-            image = batch['pil_image']
+            assert len(batch) == 1, f'batch size must be 1 not {config.batch_size}'
+            image = batch['pil_images']
             pipe.transformer = torch.compile(pipe.transformer)
             pipe.vae = torch.compile(pipe.vae)
+            # TODO need to save actual latents
             pipe(image=image, prompt='Generate the image exactly as it was provided.', 
                  width=512, height=512,
                  num_inference_steps=2)
