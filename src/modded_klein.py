@@ -52,8 +52,8 @@ logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 def prepare_image_ids(
         image_latents: list[torch.Tensor],  # [(1, C, H, W), (1, C, H, W), ...]
-        scale: int = 10,
         scanpath: list = [],
+        scale: int = 10,
     ):
         r"""
         Generates 4D time-space coordinates (T, H, W, L) for a sequence of image latents.
@@ -86,11 +86,13 @@ def prepare_image_ids(
 
         if not isinstance(image_latents, list):
             image_latents = [image_latents]
-
+        
         # create time offset for each reference image
         t_coords = [scale + scale * t for t in torch.arange(0, len(image_latents))]
         t_coords = [t.view(-1) for t in t_coords]
 
+        # TODO bs = 1
+        scanpath = scanpath[0]
         rescaled_scanpaths = [(n[0]//16, n[1]//16) for n in scanpath]
 
         image_latent_ids = []
@@ -98,26 +100,23 @@ def prepare_image_ids(
             x = x.squeeze(0)
             _, height, width = x.shape
 
-            x_ids = torch.cartesian_prod(t, torch.arange(height), torch.arange(width), torch.range(1, 1).long())
+            t = t.to('cpu', torch.int64)
+            x_ids = torch.cartesian_prod(t, torch.arange(height), torch.arange(width), torch.arange(1, 2))
             image_latent_ids.append(x_ids)
 
         image_latent_ids = torch.cat(image_latent_ids, dim=0)
-
-        scanpath_ns = torch.zeros_like(image_latent_ids)[:, -1]
+        scanpath_ns = torch.zeros_like(image_latent_ids[:, -1])
         # scanpath is ordered so ind gives us their "when"
         for ind, scanpath_xy in enumerate(rescaled_scanpaths):
             x, y = scanpath_xy
             if x == -1 and y == -1:
                 continue
-            if y * width + x < scanpath_ns.shape[1]:
-                scanpath_ns[y * width + x] = (ind + 1) * 5
-                logging.info(f'Added scan path')
-            else:
-                logging.warning(f'Scanpath includes ({x},{y}) so fall outside stimulus')
+            # TODO decide if I want to include scanpaths that are out of the window
+            if y * width + x < scanpath_ns.shape[0]:
+                scanpath_ns[int(y * width + x)] = (ind + 1) * 5
 
         image_latent_ids[:, -1] = scanpath_ns
         image_latent_ids = image_latent_ids.unsqueeze(0)
-
         return image_latent_ids
 
 @dataclass
@@ -1351,10 +1350,9 @@ class Flux2Transformer2DModel(
 
         # 3. Calculate RoPE embeddings from image and text tokens
         if img_ids.ndim == 3:
-            assert False, 'we don"t support batched inputs right now.'
-            img_ids = img_ids[0]
-        if txt_ids.ndim == 3:
-            txt_ids = txt_ids[0]
+            img_ids = img_ids.squeeze(0)
+            assert img_ids.ndim == 2, 'we don"t support batched inputs right now.'
+
 
         image_rotary_emb = self.pos_embed(img_ids)
         # text_rotary_emb = self.pos_embed(txt_ids)

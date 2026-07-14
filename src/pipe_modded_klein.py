@@ -500,20 +500,20 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
                 f"`callback_on_step_end_tensor_inputs` has to be in {self._callback_tensor_inputs}, but found {[k for k in callback_on_step_end_tensor_inputs if k not in self._callback_tensor_inputs]}"
             )
 
-        if prompt is not None and prompt_embeds is not None:
-            raise ValueError(
-                f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
-                " only forward one of the two."
-            )
-        elif prompt is None and prompt_embeds is None:
-            raise ValueError(
-                "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
-            )
-        elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
-            raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
+        # if prompt is not None and prompt_embeds is not None:
+        #     raise ValueError(
+        #         f"Cannot forward both `prompt`: {prompt} and `prompt_embeds`: {prompt_embeds}. Please make sure to"
+        #         " only forward one of the two."
+        #     )
+        # elif prompt is None and prompt_embeds is None:
+        #     raise ValueError(
+        #         "Provide either `prompt` or `prompt_embeds`. Cannot leave both `prompt` and `prompt_embeds` undefined."
+        #     )
+        # elif prompt is not None and (not isinstance(prompt, str) and not isinstance(prompt, list)):
+        #     raise ValueError(f"`prompt` has to be of type `str` or `list` but is {type(prompt)}")
 
-        if guidance_scale > 1.0 and self.config.is_distilled:
-            logger.warning(f"Guidance scale {guidance_scale} is ignored for step-wise distilled models.")
+        # if guidance_scale > 1.0 and self.config.is_distilled:
+        #     logger.warning(f"Guidance scale {guidance_scale} is ignored for step-wise distilled models.")
 
     @property
     def guidance_scale(self):
@@ -655,38 +655,39 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
         self._current_timestep = None
         self._interrupt = False
 
-        # 2. Define call parameters
-        if prompt is not None and isinstance(prompt, str):
-            batch_size = 1
-        elif prompt is not None and isinstance(prompt, list):
-            batch_size = len(prompt)
-        else:
-            batch_size = prompt_embeds.shape[0]
+        # # 2. Define call parameters
+        # if prompt is not None and isinstance(prompt, str):
+        #     batch_size = 1
+        # elif prompt is not None and isinstance(prompt, list):
+        #     batch_size = len(prompt)
+        # else:
+        #     batch_size = prompt_embeds.shape[0]
+        batch_size = 1
 
         device = self._execution_device
 
-        # 3. prepare text embeddings
-        prompt_embeds, text_ids = self.encode_prompt(
-            prompt=prompt,
-            prompt_embeds=prompt_embeds,
-            device=device,
-            num_images_per_prompt=num_images_per_prompt,
-            max_sequence_length=max_sequence_length,
-            text_encoder_out_layers=text_encoder_out_layers,
-        )
+        # # 3. prepare text embeddings
+        # prompt_embeds, text_ids = self.encode_prompt(
+        #     prompt=prompt,
+        #     prompt_embeds=prompt_embeds,
+        #     device=device,
+        #     num_images_per_prompt=num_images_per_prompt,
+        #     max_sequence_length=max_sequence_length,
+        #     text_encoder_out_layers=text_encoder_out_layers,
+        # )
 
-        if self.do_classifier_free_guidance:
-            negative_prompt = ""
-            if prompt is not None and isinstance(prompt, list):
-                negative_prompt = [negative_prompt] * len(prompt)
-            negative_prompt_embeds, negative_text_ids = self.encode_prompt(
-                prompt=negative_prompt,
-                prompt_embeds=negative_prompt_embeds,
-                device=device,
-                num_images_per_prompt=num_images_per_prompt,
-                max_sequence_length=max_sequence_length,
-                text_encoder_out_layers=text_encoder_out_layers,
-            )
+        # if self.do_classifier_free_guidance:
+        #     negative_prompt = ""
+        #     if prompt is not None and isinstance(prompt, list):
+        #         negative_prompt = [negative_prompt] * len(prompt)
+        #     negative_prompt_embeds, negative_text_ids = self.encode_prompt(
+        #         prompt=negative_prompt,
+        #         prompt_embeds=negative_prompt_embeds,
+        #         device=device,
+        #         num_images_per_prompt=num_images_per_prompt,
+        #         max_sequence_length=max_sequence_length,
+        #         text_encoder_out_layers=text_encoder_out_layers,
+        #     )
 
         # 4. process images
         if image is not None and not isinstance(image, list):
@@ -723,7 +724,7 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
             num_latents_channels=num_channels_latents,
             height=height,
             width=width,
-            dtype=prompt_embeds.dtype,
+            dtype=torch.bfloat16,
             device=device,
             generator=generator,
             latents=latents,
@@ -783,8 +784,8 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
                         hidden_states=latent_model_input,  # (B, image_seq_len, C)
                         timestep=timestep / 1000,
                         guidance=None,
-                        encoder_hidden_states=prompt_embeds,
-                        txt_ids=text_ids,  # B, text_seq_len, 4
+                        encoder_hidden_states=None,
+                        txt_ids=None,  # B, text_seq_len, 4
                         img_ids=latent_image_ids,  # B, image_seq_len, 4
                         joint_attention_kwargs=self.attention_kwargs,
                         return_dict=False,

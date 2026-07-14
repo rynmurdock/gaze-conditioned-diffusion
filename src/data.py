@@ -8,10 +8,32 @@ import os
 import numpy as np
 import torch
 from matio import load_from_mat
-from PIL import Image
+from PIL import Image, ImageDraw
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import functional as TF
 
+
+
+# not required for teacher (we'll start by trying in:identity:out)
+# but may be useful later.
+def scanpath_over_pil_image(pil_img, scanpath: np.array,
+                             max_size=30, min_size=8, color=(255, 0, 0, 160)):
+    """
+    scanpath: (T, 2 or 3) array of (x, y) points, in temporal order.
+    Point size shrinks with index -> first fixation is biggest.
+    """
+    img = pil_img.convert("RGBA")
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    T = len(scanpath)
+    sizes = np.linspace(max_size, min_size, T)
+
+    for i, (x, y) in enumerate(scanpath[:, :2]):
+        r = sizes[i] / 2
+        draw.ellipse([x - r, y - r, x + r, y + r], fill=color)
+
+    return Image.alpha_composite(img, overlay)
 
 def _iter_records(obj):
     """
@@ -58,7 +80,7 @@ class ScanpathDataset(Dataset):
 
     IMG_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff")
 
-    def __init__(self, root, mat_path, stim_size=(256, 256), coord_order="xy"):
+    def __init__(self, root, mat_path, stim_size=(512, 512), coord_order="xy"):
         """
         root:        dataset root containing `stimuli/`
         mat_path:    path to the consolidated .mat, e.g. 'trainSet/allFixData.mat'
@@ -110,10 +132,10 @@ class ScanpathDataset(Dataset):
         img_path, stim_key, fix, subj_name = self.samples[idx]
 
         # --- stimulus ---
-        img = Image.open(img_path).convert("RGB")
-        orig_w, orig_h = img.size
-        img = img.resize(self.stim_size, Image.BILINEAR)
-        img_tensor = TF.to_tensor(img) * 2 - 1  # (3, H, W), values in [-1, 1]
+        pil_img = Image.open(img_path).convert("RGB")
+        orig_w, orig_h = pil_img.size
+        pil_img = pil_img.resize(self.stim_size, Image.BILINEAR)
+        img_tensor = TF.to_tensor(pil_img) * 2 - 1  # (3, H, W), values in [-1, 1]
 
         # --- ordered scanpath ---
         fix = fix.copy()
@@ -128,6 +150,7 @@ class ScanpathDataset(Dataset):
         scanpath = torch.from_numpy(fix)
 
         return {
+            "pil_img": pil_img,
             "image": img_tensor,
             "scanpath": scanpath,
             "length": scanpath.shape[0],
@@ -161,13 +184,13 @@ def collate_scanpaths(batch):
 
 def get_dataloader(
         data_path, val_data_split_ratio,
-        batch_size, num_workers, seed
+        batch_size, num_workers, seed, resolution,
         ):
     # root should contain a `Stimuli/` subfolder (e.g. Stimuli/Action/001.jpg)
     dataset = ScanpathDataset(
         root=data_path,
         mat_path=f"{data_path}/allFixData.mat",
-        stim_size=(256, 256),
+        stim_size=(resolution, resolution),
     )
 
     assert val_data_split_ratio < 1 and val_data_split_ratio > 0

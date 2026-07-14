@@ -9,11 +9,7 @@ class Config:
 
     # Hparams
     batch_size: int = 1
-    lr: float = 1e-5
-
-    # how many scanpaths to max at
-    k: int = 8
-
+    lr: float = 1e-4
 
     # Training
     epochs: int = 3000000000000
@@ -33,7 +29,9 @@ class Config:
     # Data
     data_path: str = 'trainSet'
     val_data_split_ratio: int = .1
-    num_workers: int = 8
+    num_workers: int = 20
+    # width & height side lengths
+    resolution: int = 512
 
     # Logging
     save_path: str = './'

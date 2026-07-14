@@ -17,12 +17,13 @@
 
 [x] salience maps dataloading (https://arxiv.org/abs/2605.05204)
 [] klein keep-distill training (https://arxiv.org/abs/2605.05204)
-    [] https://huggingface.co/blog/black-forest-labs/flux-2-klein-lora
-    [] ensure we can load klein & lora/finetune/etc. *period*.
-    [] remove text experts?
+    [x] ensure we can load klein & lora/finetune/etc. *period*.
+    [x] remove text experts
     [] cache teacher outputs
-    [] could enforce a maximum number of points on the scanpath?
-      [] it's just RoPE values, so not a compute optimization.
-    [] patch pipe and setup qual eval (search notimplementederror)
+    - could enforce a maximum number of points on the scanpath?
+      [x] it's just RoPE values, so not a compute optimization.
+    [x] patch pipe and setup qual eval
     [x] ckpt loading (see other notimplementederror)
     [x] condition on scanpath (not just fixation points)
+
+

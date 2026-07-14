@@ -30,17 +30,17 @@ def main(config):
     torch.manual_seed(config.seed)
 
     model = get_model_and_tokenizer(config.model_path, config.device, config.dtype, config.seed, config.do_compile, config)
-
     # grab attn linears
-    trained_params = [p for n, p in model.pipe.transformer.named_parameters() if 'to_q' in n]
-    not_trained = [p for n, p in model.pipe.transformer.named_parameters() if 'to_q' in n]
+    trained_params = [p for n, p in model.pipe.transformer.named_parameters() if '' in n]
+    not_trained = [p for n, p in model.pipe.transformer.named_parameters() if not '' in n]
     optimizer, lr_sched = get_optimizer_and_lr_sched(trained_params, 
                                                      config.lr)
     for p in not_trained:
         p.requires_grad = False
     
     dataloader, val_dataloader = get_dataloader(config.data_path, config.val_data_split_ratio,
-                                                 config.batch_size, config.num_workers, config.seed)
+                                                 config.batch_size, config.num_workers, config.seed,
+                                                 config.resolution)
     
     train_losses = []
     inner_train_losses = []
@@ -60,14 +60,12 @@ def main(config):
             scanpaths = batch['scanpaths']
             
             scanpaths = scanpaths.to(config.device)
-            x0 = x0.to(config.device)
-            x0 = x0.to(config.dtype)
+            x0 = x0.to(config.device, config.dtype)
 
             if total_inds % config.freq == 0:
                 # NOTE autocasting because our fp32 training model is also our val model; only want calculations in half.
-                with torch.autocast(enabled=True, device_type='cuda', dtype=config.dtype): 
-                    # TODO
-                    # model.do_qual_val([[Image.open(j) for j in examples]], k=config.k)
+                with torch.autocast(enabled=True, device_type='cuda', dtype=config.dtype):
+                    model.do_qual_val()
 
                     val_loss = model.do_quant_val(val_dataloader, config.max_val_steps)
                     logging.info(f'{val_loss=:.4f}')
