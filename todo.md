@@ -7,11 +7,6 @@
   [] using those simple shape morphers
   [] using zoom-in and propogate
   [] using preference-prior-esque genrec system
-[] use for guiding
-  [] train point-conditioned video model so that gaze naturally moves media
-  [] train scanpath-conditioned media so the image will generate with relevant portions
-      at your latest fixations.
-        [] morph generations and/or only update on long saccades
 
 
 [x] salience maps dataloading (https://arxiv.org/abs/1505.03581)
@@ -27,9 +22,15 @@
 [x] klein keep-distill training (https://arxiv.org/abs/2605.05204)
   [x] cache teacher outputs
     - vae latents saved as tensor with mapping from images
+  [] use existing ckpt for guiding (boxes below) to proof out further changes.
   [] put onto vast.ai so we can easily finetune with text encoder kept & adam
   [] could use LoRA & switch on/off
 
+[] use for guiding
+  [] train scanpath-conditioned model so the image will generate with relevant portions
+      at your latest fixations.
+        [] morph generations and/or only update on long saccades
+  [] train point-conditioned video model (longcat? ltx?) so that gaze naturally moves media
 
 
 
