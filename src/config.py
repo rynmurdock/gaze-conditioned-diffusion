@@ -5,15 +5,15 @@ import torch
 class Config:
     # Model
     model_path = None
-    # model_path = './last_epoch_ckpt'
+    model_path = './last_epoch_ckpt'
 
     # Hparams
     batch_size: int = 1
-    lr: float = 1e-4
+    lr: float = 2e-5
 
     # Training
     epochs: int = 3000000000000
-    max_steps: int = 400000
+    max_steps: int = 3000000000000
 
     # TODO should be much higher
     max_val_steps: int = 32
@@ -33,9 +33,11 @@ class Config:
     # width & height side lengths
     resolution: int = 512
 
+    use_distilled_latents: bool = True
+
     # Logging
     save_path: str = './'
-    freq: int = 100  # how often we save/log/etc.
+    freq: int = 1000  # how often we save/log/etc.
 
 
 main_config = Config()

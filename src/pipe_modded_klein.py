@@ -548,7 +548,7 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
         prompt: str | list[str] = None,
         height: int | None = None,
         width: int | None = None,
-        num_inference_steps: int = 50,
+        c: int = 50,
         sigmas: list[float] | None = None,
         guidance_scale: float = 4.0,
         num_images_per_prompt: int = 1,
@@ -562,6 +562,7 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
         callback_on_step_end: Callable[[int, int, dict], None] | None = None,
         callback_on_step_end_tensor_inputs: list[str] = ["latents"],
         max_sequence_length: int = 512,
+        num_inference_steps=4,
         text_encoder_out_layers: tuple[int] = (9, 18, 27),
     ):
         r"""
@@ -639,6 +640,12 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
             `return_dict` is True, otherwise a `tuple`. When returning a tuple, the first element is a list with the
             generated images.
         """
+
+        offload_vae_back_to_cpu = False
+        # infer vae device from the all params
+        if any([p.device != torch.device('cuda:0') for p in self.vae.parameters()]):
+            offload_vae_back_to_cpu = True
+            self.vae = self.vae.to('cuda')
 
         # 1. Check inputs. Raise error if not correct
         self.check_inputs(
@@ -800,7 +807,7 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
                             timestep=timestep / 1000,
                             guidance=None,
                             encoder_hidden_states=negative_prompt_embeds,
-                            txt_ids=negative_text_ids,
+                            txt_ids=None,
                             img_ids=latent_image_ids,
                             joint_attention_kwargs=self._attention_kwargs,
                             return_dict=False,
@@ -851,6 +858,9 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
         else:
             image = self.vae.decode(latents, return_dict=False)[0]
             image = self.image_processor.postprocess(image, output_type=output_type)
+        
+        if offload_vae_back_to_cpu:
+            self.vae = self.vae.to('cpu')
 
         # Offload all models
         self.maybe_free_model_hooks()

@@ -1,6 +1,6 @@
 *.json
 *.safetensors
-
+*.pt
 *.zip
 *.png
 *.jpg

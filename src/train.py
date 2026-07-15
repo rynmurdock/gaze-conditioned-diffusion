@@ -2,7 +2,7 @@
 
 ###########################################
 '''
-python src/train.py
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python src/train.py
 '''
 ###########################################
 
@@ -40,7 +40,7 @@ def main(config):
     
     dataloader, val_dataloader = get_dataloader(config.data_path, config.val_data_split_ratio,
                                                  config.batch_size, config.num_workers, config.seed,
-                                                 config.resolution)
+                                                 config.resolution, config.use_distilled_latents)
     
     train_losses = []
     inner_train_losses = []
@@ -51,17 +51,18 @@ def main(config):
         for ind, batch in tqdm(enumerate(iter(dataloader))):
             if total_inds > config.max_steps:
                 logging.info('Saving our transformer & ending training')
-                model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', 
-                                                  from_pt=True)
+                model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', )
                 sys.exit()
-            if batch is None:
+            if batch is None or \
+                            (config.use_distilled_latents and batch.get('latents', None) is None):
+                logging.warning(f'Skipping batch! {batch}')
                 continue
 
-            x0 = batch['images']
+            image = batch['images']
             scanpaths = batch['scanpaths']
             
             scanpaths = scanpaths.to(config.device)
-            x0 = x0.to(config.device, config.dtype)
+            image = image.to(config.device, config.dtype)
 
             if total_inds % config.freq == 0:
                 # NOTE autocasting because our fp32 training model is also our val model
@@ -82,7 +83,11 @@ def main(config):
                 plt.savefig('latest_loss_curves.png')
                 plt.clf()
 
-            loss, loss_logging_dict = get_loss(model, x0, scanpaths)
+            loss, loss_logging_dict = get_loss(model, image, scanpaths, 
+                                               latents=batch.get('latents'),
+                                               timesteps=batch.get('timesteps'),
+                                               noise_pred=batch.get('noise_preds'),
+                                               )
             if total_inds % config.freq == 0:
                 mse_loss = loss_logging_dict.get('mse_loss')
                 logging.info(
@@ -98,7 +103,9 @@ def main(config):
             total_inds += 1
             if total_inds % config.freq == 0:
                 logging.info('Saving our transformer')
-                model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', from_pt=True)
+                model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt',)
+
+
 
 if __name__ == '__main__':
     assert main_config.batch_size == 1, 'we"ll need batched RoPE for higher batch size'
