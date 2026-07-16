@@ -89,16 +89,31 @@ class Zoo(torch.nn.Module):
     @torch.no_grad()
     def do_qual_val(self,):
         generator = torch.Generator(device="cpu").manual_seed(self.seed)
+        generator_1 = torch.Generator(device="cpu").manual_seed(self.seed+789)
 
         images = self.pipe(
-            scanpath=torch.randint(0, 10, (1, 5, 2)).to('cuda'),
+            scanpath=torch.randint(0, 512, (1, 12, 2), generator=generator).to('cuda'),
             num_inference_steps=4,
             guidance_scale=1,
             height=512,
             width=512,
             generator=generator,
+            overlay_scanpath=True,
         ).images
         images[0].save('latest_val.png')
+
+        # we modify just the scanpath here
+        images = self.pipe(
+            scanpath=torch.randint(0, 512, (1, 12, 2), generator=generator_1).to('cuda'),
+            num_inference_steps=4,
+            guidance_scale=1,
+            height=512,
+            width=512,
+            generator=generator,
+            overlay_scanpath=True,
+        ).images
+        images[0].save('1_latest_val.png')
+
         return images
     
     @torch.no_grad()
@@ -163,5 +178,5 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
 def get_optimizer_and_lr_sched(params, lr):
     logging.info(f'Training: {params}')
     optimizer = torch.optim.SGD(params, lr=lr)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=10000, T_mult=2, eta_min=8e-7)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=1000, T_mult=1)
     return optimizer, scheduler

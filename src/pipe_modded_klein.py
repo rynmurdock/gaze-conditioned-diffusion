@@ -38,7 +38,7 @@ from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 from diffusers.pipelines.flux2.image_processor import Flux2ImageProcessor
 from diffusers.pipelines.flux2.pipeline_output import Flux2PipelineOutput
 
-
+from data import scanpath_over_pil_image
 from modded_klein import prepare_image_ids
 
 if is_torch_xla_available():
@@ -438,41 +438,6 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
         latents = self._pack_latents(latents)  # [B, C, H, W] -> [B, H*W, C]
         return latents, latent_ids
 
-    # Copied from diffusers.pipelines.flux2.pipeline_flux2.Flux2Pipeline.prepare_image_latents
-    def prepare_image_latents(
-        self,
-        images: list[torch.Tensor],
-        scanpath,
-        batch_size,
-        generator: torch.Generator,
-        device,
-        dtype,
-    ):
-        image_latents = []
-        for image in images:
-            image = image.to(device=device, dtype=dtype)
-            imagge_latent = self._encode_vae_image(image=image, generator=generator)
-            image_latents.append(imagge_latent)  # (1, 128, 32, 32)
-
-        image_latent_ids = self.prepare_image_latents(image_latents, scanpath=scanpath)
-
-        # Pack each latent and concatenate
-        packed_latents = []
-        for latent in image_latents:
-            # latent: (1, 128, 32, 32)
-            packed = self._pack_latents(latent)  # (1, 1024, 128)
-            packed = packed.squeeze(0)  # (1024, 128) - remove batch dim
-            packed_latents.append(packed)
-
-        # Concatenate all reference tokens along sequence dimension
-        image_latents = torch.cat(packed_latents, dim=0)  # (N*1024, 128)
-        image_latents = image_latents.unsqueeze(0)  # (1, N*1024, 128)
-
-        image_latents = image_latents.repeat(batch_size, 1, 1)
-        image_latent_ids = image_latent_ids.repeat(batch_size, 1, 1)
-        image_latent_ids = image_latent_ids.to(device)
-
-        return image_latents, image_latent_ids
 
     def check_inputs(
         self,
@@ -544,6 +509,7 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
     def __call__(
         self,
         scanpath,
+        overlay_scanpath: bool = False,
         image: list[PIL.Image.Image] | PIL.Image.Image | None = None,
         prompt: str | list[str] = None,
         height: int | None = None,
@@ -737,17 +703,6 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
             latents=latents,
         )
 
-        image_latents = None
-        image_latent_ids = None
-        if condition_images is not None:
-            image_latents, image_latent_ids = self.prepare_image_latents(
-                images=condition_images,
-                scanpath=scanpath,
-                batch_size=batch_size * num_images_per_prompt,
-                generator=generator,
-                device=device,
-                dtype=self.vae.dtype,
-            )
 
         # 6. Prepare timesteps
         sigmas = np.linspace(1.0, 1 / num_inference_steps, num_inference_steps) if sigmas is None else sigmas
@@ -781,10 +736,6 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
 
                 latent_model_input = latents.to(self.transformer.dtype)
                 latent_image_ids = latent_ids
-
-                if image_latents is not None:
-                    latent_model_input = torch.cat([latents, image_latents], dim=1).to(self.transformer.dtype)
-                    latent_image_ids = torch.cat([latent_ids, image_latent_ids], dim=1)
 
                 with self.transformer.cache_context("cond"):
                     noise_pred = self.transformer(
@@ -858,6 +809,9 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
         else:
             image = self.vae.decode(latents, return_dict=False)[0]
             image = self.image_processor.postprocess(image, output_type=output_type)
+            if overlay_scanpath:
+                # TODO batch_size = 1
+                image = [scanpath_over_pil_image(image[0], scanpath[0])]
         
         if offload_vae_back_to_cpu:
             self.vae = self.vae.to('cpu')

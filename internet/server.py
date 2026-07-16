@@ -3,23 +3,35 @@ import io
 import torch
 import json
 import time
+import math
 import websockets
 
 from concurrent.futures import ThreadPoolExecutor
 from PIL import Image, ImageDraw
-from diffusers import Flux2KleinPipeline
+
+# TODO update
+import sys
+sys.path.append('/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/src/')
+from pipe_modded_klein import Flux2KleinPipeline
+from modded_klein import Flux2Transformer2DModel
 
 
 HOST = "localhost"
 PORT = 8765
+SEED = 9
 
-USE_CIRCLE = True
+USE_CIRCLE = False
+
+LAST_12_POINTS = []
 
 if not USE_CIRCLE:
     device = "cuda"
     dtype = torch.bfloat16
-    pipe = Flux2KleinPipeline.from_pretrained("black-forest-labs/FLUX.2-klein-4B", torch_dtype=dtype)
-    pipe = pipe.to(device)
+    transformer = Flux2Transformer2DModel.from_pretrained('last_epoch_ckpt')
+    pipe = Flux2KleinPipeline.from_pretrained("black-forest-labs/FLUX.2-klein-4B", 
+                                              transformer=transformer,
+                                              torch_dtype=dtype)
+    pipe = pipe.to(device, dtype)
     pipe.transformer = torch.compile(pipe.transformer)
     pipe.vae = torch.compile(pipe.vae)
 
@@ -41,32 +53,33 @@ def coords_to_pil_out(x, y, w, h):
     return buf.getvalue()
 
 
+def distance(p1, p2):
+    print(p1)
+    x1, y1 = p1
+    x2, y2 = p2
+    return math.hypot(x2 - x1, y2 - y1)
+
 @torch.no_grad()
-def coords_to_klein_out(x, y, w, h) -> bytes:
-    abs_h = 16
-    abs_w = 16
+def coords_to_klein_out(coords) -> bytes:
+    global SEED
+    coords = torch.tensor([coords]).to(torch.bfloat16)
 
-    ar = h / w
-    h = int(abs_h)
-    w = int(abs_w / ar)
-    latents = torch.randn(1, 128, h, w).to(device, dtype)
+    if distance(coords[0][-1], coords[0][-2]) > 128:
+        SEED = SEED + torch.randint(-10, 10, (1,)).item()
 
-    xi = min(max(int(w * x), 0), w - 1)
-    yi = min(max(int(h * y), 0), h - 1)
-    H, W = latents.shape[2], latents.shape[3]
-    y0, y1 = max(yi - 4, 0), min(yi + 4, H)
-    x0, x1 = max(xi - 4, 0), min(xi + 4, W)
-    latents[:, :, y0:y1, x0:x1] = -2
-
-    image = pipe(
-        prompt='fractal',
-        height=16 * h,
-        width=16 * w,
-        guidance_scale=1.0,
-        num_inference_steps=2,
-        latents=latents,
-        generator=torch.Generator(device=device).manual_seed(9)
-    ).images[0]
+    print(coords.shape)
+    try:
+        image = pipe(
+            scanpath=coords,
+            overlay_scanpath=True,
+            height=512,
+            width=512,
+            guidance_scale=1.0,
+            num_inference_steps=4,
+            generator=torch.Generator(device=device).manual_seed(SEED)
+        ).images[0]
+    except Exception as e:
+        print(e)
 
     buf = io.BytesIO()
     image.save(buf, format="PNG")
@@ -74,14 +87,21 @@ def coords_to_klein_out(x, y, w, h) -> bytes:
 
 
 def process_gaze(x: float, y: float, width: float, height: float, t: float) -> bytes:
+    global LAST_12_POINTS
+
+    x1, y1 = x * 512, y * 512
+    LAST_12_POINTS.append((x1, y1))
+    if len(LAST_12_POINTS) > 12:
+        LAST_12_POINTS.pop(0)
+
     try:
         """Runs on the executor thread. Returns raw PNG bytes."""
         if USE_CIRCLE:
             return coords_to_pil_out(x, y, width, height)
         else:
-            return coords_to_klein_out(x, y, width, height)
+            return coords_to_klein_out(LAST_12_POINTS)
     except Exception as e:
-        print(e)
+        raise(e)
 
 async def handler(websocket):
     print("Client connected.")

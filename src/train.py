@@ -30,9 +30,9 @@ def main(config):
     torch.manual_seed(config.seed)
 
     model = get_model_and_tokenizer(config.model_path, config.device, config.dtype, config.seed, config.do_compile, config)
-    # grab attn linears
-    trained_params = [p for n, p in model.pipe.transformer.named_parameters() if 'to_q' in n]
-    not_trained = [p for n, p in model.pipe.transformer.named_parameters() if not 'to_q' in n]
+    # NOTE: these are flipped! exclusions by pattern!
+    trained_params = [p for n, p in model.pipe.transformer.named_parameters() if not 'to_q' in n]
+    not_trained = [p for n, p in model.pipe.transformer.named_parameters() if 'to_q' in n]
     optimizer, lr_sched = get_optimizer_and_lr_sched(trained_params, 
                                                      config.lr)
     for p in not_trained:

@@ -1,5 +1,10 @@
 
 
+[] use for guiding
+  [] train scanpath-conditioned model so the image will generate with relevant portions
+      at your latest fixations.
+        [] morph generations and/or only update on long saccades
+  [] train point-conditioned video model (longcat? ltx?) so that gaze naturally moves media
 [] use for evading gaze
   [] could cache generated images/video by coordinate
   [] detect saccades?
@@ -10,7 +15,7 @@
 
 
 [x] salience maps dataloading (https://arxiv.org/abs/1505.03581)
-[] klein training
+[x] klein training
     [x] ensure we can load klein & lora/finetune/etc. *period*.
     [x] remove text experts
     - could enforce a maximum number of points on the scanpath?
@@ -19,18 +24,20 @@
     [x] ckpt loading (see other notimplementederror)
     [x] condition on scanpath (not just fixation points)
     - if you don't keep-distill train, would need to set a timestep schedule
+
+
 [x] klein keep-distill training (https://arxiv.org/abs/2605.05204)
   [x] cache teacher outputs
     - vae latents saved as tensor with mapping from images
+  - may be overfitting worse by only single trajectories per image
   [] use existing ckpt for guiding (boxes below) to proof out further changes.
   [] put onto vast.ai so we can easily finetune with text encoder kept & adam
   [] could use LoRA & switch on/off
 
-[] use for guiding
-  [] train scanpath-conditioned model so the image will generate with relevant portions
-      at your latest fixations.
-        [] morph generations and/or only update on long saccades
-  [] train point-conditioned video model (longcat? ltx?) so that gaze naturally moves media
 
+[x] inference with saccade updating our image
 
-
+Next:
+[] qlora, add back text encoder, train with adam, etc.
+[] train at low-ish-res but at AR that matches monitor
+[] light cfg on with/without gaze rope?

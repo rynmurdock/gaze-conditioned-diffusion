@@ -9,7 +9,7 @@ class Config:
 
     # Hparams
     batch_size: int = 1
-    lr: float = 2e-5
+    lr: float = 1e-4
 
     # Training
     epochs: int = 3000000000000
@@ -24,7 +24,7 @@ class Config:
     # specifically for *mixed precision*
     dtype: torch.dtype = field(default=torch.bfloat16, repr=False)
     activation_checkpointing: bool = True
-    seed: int = 107
+    seed: int = 101
 
     # Data
     data_path: str = 'trainSet'
@@ -37,7 +37,7 @@ class Config:
 
     # Logging
     save_path: str = './'
-    freq: int = 1000  # how often we save/log/etc.
+    freq: int = 100 # how often we save/log/etc.
 
 
 main_config = Config()
