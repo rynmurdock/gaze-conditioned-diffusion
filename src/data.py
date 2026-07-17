@@ -82,14 +82,14 @@ class ScanpathDataset(Dataset):
     IMG_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff")
 
     def __init__(self, root, mat_path, stim_size=(512, 512), 
-                 coord_order="xy", use_distilled_latents=False):
+                 coord_order="xy", use_cached_distilled_latents=False):
         """
         root:        dataset root containing `stimuli/`
         mat_path:    path to the consolidated .mat, e.g. 'trainSet/allFixData.mat'
         stim_size:   (W, H) to resize every stimulus (and rescale coords) to
         coord_order: 'xy' if data columns are [x, y]; 'yx' if [y, x]
         """
-        self.use_distilled_latents = use_distilled_latents
+        self.use_cached_distilled_latents = use_cached_distilled_latents
         self.root = root
         # Keys are already relative paths like 'Action/001.jpg', matching
         # Stimuli/Action/001.jpg on disk directly - no lookup table needed.
@@ -162,7 +162,7 @@ class ScanpathDataset(Dataset):
             'img_path': img_path,
         }
 
-        if self.use_distilled_latents:
+        if self.use_cached_distilled_latents:
             # e.g. ./klein_latents_stimuli/trainSet/Stimuli/LowResolution/011.jpg_latent_1.pt
             # choose randomly from from the K=[1,4] timesteps.
             ind = str(int(torch.randint(0, 4, (1,)).item()))
@@ -236,7 +236,7 @@ def collate_scanpaths(batch):
 
 def get_dataloader(
         data_path, val_data_split_ratio,
-        batch_size, num_workers, seed, resolution, use_distilled_latents
+        batch_size, num_workers, seed, resolution, use_cached_distilled_latents
         ):
     # root should contain a `Stimuli/` subfolder (e.g. Stimuli/Action/001.jpg)
 
@@ -246,7 +246,7 @@ def get_dataloader(
         root=data_path,
         mat_path=f"{data_path}/allFixData.mat",
         stim_size=resolution,
-        use_distilled_latents=use_distilled_latents,
+        use_cached_distilled_latents=use_cached_distilled_latents,
     )
 
     assert val_data_split_ratio < 1 and val_data_split_ratio > 0

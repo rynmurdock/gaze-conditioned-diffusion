@@ -19,13 +19,15 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from data import get_dataloader
+from config import main_config, verify_config_validity
 from model import get_model_and_tokenizer, get_optimizer_and_lr_sched, get_loss
-from config import main_config
 
 
 logging.basicConfig(level=logging.INFO)
 
 def main(config):
+    verify_config_validity(config)
+
     np.random.seed(config.seed)
     torch.manual_seed(config.seed)
 
@@ -42,7 +44,7 @@ def main(config):
     
     dataloader, val_dataloader = get_dataloader(config.data_path, config.val_data_split_ratio,
                                                  config.batch_size, config.num_workers, config.seed,
-                                                 config.resolution, config.use_distilled_latents)
+                                                 config.resolution, config.use_cached_distilled_latents)
     
     train_losses = []
     inner_train_losses = []
@@ -59,7 +61,7 @@ def main(config):
                     model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', )
                 sys.exit()
             if batch is None or \
-                            (config.use_distilled_latents and batch.get('latents', None) is None):
+                            (config.use_cached_distilled_latents and batch.get('latents', None) is None):
                 logging.warning(f'Skipping batch! {batch}')
                 continue
 
@@ -92,6 +94,7 @@ def main(config):
                                                latents=batch.get('latents'),
                                                timesteps=batch.get('timesteps'),
                                                noise_pred=batch.get('noise_preds'),
+                                               sample_teacher=config.sample_teacher
                                                )
             if total_inds % config.freq == 0:
                 mse_loss = loss_logging_dict.get('mse_loss')
@@ -113,6 +116,5 @@ def main(config):
 
 
 if __name__ == '__main__':
-    assert main_config.batch_size == 1, 'we"ll need batched RoPE for higher batch size'
     main(main_config)
 

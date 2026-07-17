@@ -13,7 +13,7 @@ from peft import LoraConfig
 
 def get_loss(model, image, scanpaths, 
              latents=None, timesteps=None, noise_pred=None,
-             dtype=None):
+             dtype=None, sample_teacher=False):
     dtype = model.dtype if not dtype else dtype
     with torch.no_grad():
         # rng drop out inputs
@@ -165,6 +165,7 @@ class Zoo(torch.nn.Module):
                                                latents=batch.get('latents'),
                                                timesteps=batch.get('timesteps'),
                                                noise_pred=batch.get('noise_preds'),
+                                               sample_teacher=self.config.sample_teacher
                                                )
                 losses.append(loss.item())
                 if index > max_val_steps:
@@ -212,7 +213,7 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
     if config.activation_checkpointing:
         transformer.enable_gradient_checkpointing()
 
-    if not config.use_distilled_latents:
+    if not config.use_cached_distilled_latents:
         pipe.vae = pipe.vae.to(device, dtype)
         if do_compile:
             pipe.vae = torch.compile(pipe.vae)

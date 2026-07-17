@@ -32,6 +32,7 @@
   - may be overfitting worse by only single trajectories per image
     [] could use LoRA & switch on/off for student / teacher
   [x] qlora, train with adam, etc.
+  [] support batch_size > 1
   [x] option to add back text encoder
     [x] can fall back to diffusers klein+pipe & patch the RoPE
   [x] use existing ckpt for guiding (boxes below) to proof out further changes.

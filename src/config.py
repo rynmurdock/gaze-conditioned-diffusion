@@ -6,10 +6,14 @@ class Config:
     # Model
     model_path = None
     # model_path = './last_epoch_ckpt'
-    lora_rank: int = 16
+
+    remove_text_encoder: bool = False
+    lora_rank: int = 64
+    sample_teacher: bool = True
+
     quantize_adam: bool = False
     quantize_model: bool = False
-    remove_text_encoder: bool = False
+
 
     # Hparams
     batch_size: int = 1
@@ -35,11 +39,23 @@ class Config:
     # width & height side lengths
     resolution: tuple[int, int] = (512, 512)
 
-    use_distilled_latents: bool = True
+    use_cached_distilled_latents: bool = True
 
     # Logging
     save_path: str = './'
     freq: int = 100 # how often we save/log/etc.
 
+def verify_config_validity(config):
+    assert config.batch_size == 1, 'We do not support batch_size > 1 yet.'
+    assert not (config.sample_teacher and config.use_cached_distilled_latents), (
+        "There's no reason to try to use our cached latents and sample new ones"
+    )
+    assert not (config.sample_teacher and not (config.remove_text_encoder and config.lora_rank)), (
+        'sample_teacher is only allowed with LoRA and text encoders kept. '
+        'we directly turn off our LoRA, grab a random input/output pair, then train on it. '
+        'We want our teacher to already be there and undisturbed.'
+        )
 
 main_config = Config()
+
+
