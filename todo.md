@@ -30,6 +30,7 @@
   [x] cache teacher outputs
     - vae latents saved as tensor with mapping from images
   - may be overfitting worse by only single trajectories per image
+  [x] qlora, add back text encoder, train with adam, etc.
   [] use existing ckpt for guiding (boxes below) to proof out further changes.
   [] put onto vast.ai so we can easily finetune with text encoder kept & adam
   [] could use LoRA & switch on/off
@@ -38,6 +39,6 @@
 [x] inference with saccade updating our image
 
 Next:
-[] qlora, add back text encoder, train with adam, etc.
 [] train at low-ish-res but at AR that matches monitor
+  [] regenerate teacher i/o pairs
 [] light cfg on with/without gaze rope?

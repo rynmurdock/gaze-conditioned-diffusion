@@ -245,7 +245,7 @@ def get_dataloader(
     dataset = ScanpathDataset(
         root=data_path,
         mat_path=f"{data_path}/allFixData.mat",
-        stim_size=(resolution, resolution),
+        stim_size=resolution,
         use_distilled_latents=use_distilled_latents,
     )
 
@@ -271,7 +271,7 @@ if __name__ == "__main__":
     dataset = ScanpathDataset(
         root="trainSet",
         mat_path="trainSet/allFixData.mat",
-        stim_size=(256, 256),
+        stim_size=(384, 768),
     )
     loader = DataLoader(dataset, batch_size=8, shuffle=True, collate_fn=collate_scanpaths)
 

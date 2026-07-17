@@ -5,7 +5,10 @@ import logging
 from pipe_modded_klein import Flux2KleinPipeline
 from modded_klein import Flux2Transformer2DModel, prepare_image_ids
 
-from types import SimpleNamespace
+from diffusers import BitsAndBytesConfig
+import bitsandbytes as bnb
+from peft import LoraConfig
+
 
 
 def get_loss(model, image, scanpaths, 
@@ -67,12 +70,13 @@ def get_loss(model, image, scanpaths,
 
 
 class Zoo(torch.nn.Module):
-    def __init__(self, pipe, device, dtype, seed=0) -> None:
+    def __init__(self, pipe, device, dtype, seed=0, config=None) -> None:
         super().__init__()
         self.pipe = pipe
         self.seed = seed
         # NOTE: dtype is the mixed dtype; transformer is still in float32
         self.device, self.dtype = device, dtype
+        self.config = config
 
     def forward(self, latents, timesteps, gaze_image_ids):
         velocity = self.pipe.transformer(
@@ -92,7 +96,7 @@ class Zoo(torch.nn.Module):
         generator_1 = torch.Generator(device="cpu").manual_seed(self.seed+789)
 
         images = self.pipe(
-            scanpath=torch.randint(0, 512, (1, 12, 2), generator=generator).to('cuda'),
+            scanpath=torch.randint(0, 384, (1, 12, 2), generator=generator).to('cuda'),
             num_inference_steps=4,
             guidance_scale=1,
             height=512,
@@ -107,8 +111,8 @@ class Zoo(torch.nn.Module):
             scanpath=torch.randint(0, 512, (1, 12, 2), generator=generator_1).to('cuda'),
             num_inference_steps=4,
             guidance_scale=1,
-            height=512,
-            width=512,
+            height=self.config.resolution[1],
+            width=self.config.resolution[0],
             generator=generator,
             overlay_scanpath=True,
         ).images
@@ -142,11 +146,26 @@ class Zoo(torch.nn.Module):
                     return sum(losses) / len(losses)
             return sum(losses) / len(losses)
 
-def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):    
+def add_lora(transformer, rank):
+    transformer_lora_config = LoraConfig(
+        r=rank,
+        lora_alpha=rank, 
+        init_lora_weights="gaussian",
+        target_modules='all-linear',
+    )
+    transformer.add_adapter(transformer_lora_config)
+    print(f"trainable params: {transformer.num_parameters(only_trainable=True)} || all params: {transformer.num_parameters()}")
+
+
+def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
     transformer = Flux2Transformer2DModel.from_pretrained("black-forest-labs/FLUX.2-klein-4B" if path is None
                                                            else path, # we save without a subdir
                                                            subfolder=None if path else 'transformer',
+                                                           quantization_config=BitsAndBytesConfig(load_in_8bit=True,) if config.quantize_model else None,
                                                            strict=False)
+    if config.lora_rank:
+        # inplace operation
+        add_lora(transformer, config.lora_rank)
     pipe = Flux2KleinPipeline.from_pretrained("black-forest-labs/FLUX.2-klein-4B", 
                                               transformer=transformer,
                                               # full precision weights
@@ -172,11 +191,13 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
     if do_compile:
         transformer = torch.compile(transformer)
     
-    model = Zoo(pipe, config.device, config.dtype, seed).to(device)
+    model = Zoo(pipe, config.device, config.dtype, seed, config=config).to(device)
     return model
 
-def get_optimizer_and_lr_sched(params, lr):
-    logging.info(f'Training: {params}')
-    optimizer = torch.optim.SGD(params, lr=lr)
+def get_optimizer_and_lr_sched(params, lr, config):
+    if config.quantize_adam:
+        optimizer = bnb.optim.Adam8bit(params, lr=lr)
+    else:
+        optimizer = torch.optim.AdamW(params, lr=lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=1000, T_mult=1)
     return optimizer, scheduler

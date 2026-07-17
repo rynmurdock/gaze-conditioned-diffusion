@@ -5,7 +5,10 @@ import torch
 class Config:
     # Model
     model_path = None
-    model_path = './last_epoch_ckpt'
+    # model_path = './last_epoch_ckpt'
+    lora_rank: int = 16
+    quantize_adam: bool = True
+    quantize_model: bool = False
 
     # Hparams
     batch_size: int = 1
@@ -31,7 +34,7 @@ class Config:
     val_data_split_ratio: int = .1
     num_workers: int = 20
     # width & height side lengths
-    resolution: int = 512
+    resolution: tuple[int, int] = (512, 512)
 
     use_distilled_latents: bool = True
 
