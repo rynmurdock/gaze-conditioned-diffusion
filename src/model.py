@@ -23,14 +23,14 @@ def get_loss(model, image, scanpaths,
         # so we don't do attention mask / padding to largest
         scanpaths[zeroing_mask] = 0
 
-        # we load pre-encoded images
         if latents is None:
             x0 = model.pipe._encode_vae_image(image, None)
         else:
+            # we load pre-encoded images
             latents = latents.to(image.device)
             noise_pred = noise_pred.to(image.device)
             timesteps = timesteps.to(image.device)
-            target = noise_pred
+            teacher_noise_pred = noise_pred
             # misnomer but fine for our purposes
             x0 = target.new_zeros(
                 image.shape[0],
@@ -40,25 +40,39 @@ def get_loss(model, image, scanpaths,
                 (int(image.shape[-1]) // (model.pipe.vae_scale_factor * 2)),
                 )
 
-        gaze_image_ids = prepare_image_ids([x0], scanpaths)
+        gaze_image_ids = prepare_image_ids([x0], scanpaths).to(x0.device)
+        typical_image_ids = Flux2KleinPipeline._prepare_image_ids([x0]).to(x0.device)
         x0 = model.pipe._pack_latents(x0)
 
         noise = torch.randn_like(x0)
 
         if latents is None:
+            # TODO don't use uniform sampling (can try logit normal & also just teacher's schedule)
             timesteps = torch.randint(0, 1000, (noise.shape[0],)).to(x0.device)
-            # TODO don't use uniform sampling
             sigma = timesteps / 1000
             latents = sigma * noise + (1 - sigma) * x0
+
+        if sample_teacher:
+            model.pipe.transformer.disable_lora()
+            teacher_noise_pred = model(latents, 
+                       timesteps=timesteps, image_ids=typical_image_ids, 
+                       prompt_embeds=model.pipe.cached_teacher_prompt,
+                       txt_ids=model.pipe.cached_teacher_txt_ids,
+                       )
+            model.pipe.transformer.enable_lora()
 
 
     with torch.autocast(device_type='cuda', enabled=True, dtype=dtype):
         output = model(latents, 
-                       timesteps=timesteps, gaze_image_ids=gaze_image_ids,
+                       timesteps=timesteps, image_ids=gaze_image_ids,
+                       prompt_embeds=model.pipe.cached_prompt,
+                       txt_ids=model.pipe.cached_txt_ids,
                        )
 
     if noise_pred is None:
         target = noise - x0
+    else:
+        target = teacher_noise_pred
 
     output = output.to(torch.float32)
     target = target.to(torch.float32)
@@ -78,12 +92,10 @@ class Zoo(torch.nn.Module):
         self.device, self.dtype = device, dtype
         self.config = config
 
-    def forward(self, latents, timesteps, gaze_image_ids):
-        prompt_embeds = None
-        txt_ids = None
-        if not self.config.remove_text_encoder:
+    def forward(self, latents, timesteps, image_ids, prompt_embeds=None, txt_ids=None):
+        if prompt_embeds is None:
             prompt_embeds = torch.zeros(latents.shape[0], 1, 7680).to(latents.device, latents.dtype)
-            txt_ids = torch.zeros(latents.shape[0], 4)
+            txt_ids = torch.zeros(latents.shape[0], 4).to(latents.device, latents.dtype)
         
         velocity = self.pipe.transformer(
                 hidden_states=latents,  # (B, image_seq_len, C)
@@ -91,7 +103,7 @@ class Zoo(torch.nn.Module):
                 guidance=None,
                 encoder_hidden_states=prompt_embeds,
                 txt_ids=txt_ids,
-                img_ids=gaze_image_ids,  # B, image_seq_len, 4
+                img_ids=image_ids,  # B, image_seq_len, 4
                 return_dict=False,
         )[0]
         return velocity
@@ -146,7 +158,7 @@ class Zoo(torch.nn.Module):
     
     @torch.no_grad()
     def do_quant_val(self, val_dataloader, max_val_steps, dtype):
-        logging.info(f'Running validation for max {max_val_steps}')
+        logging.info(f'\nRunning validation for max {max_val_steps}\n')
         # fork_rng temporarily isolates changes
         with torch.random.fork_rng():
             # You can change the seed here locally
@@ -172,6 +184,11 @@ class Zoo(torch.nn.Module):
                     return sum(losses) / len(losses)
             return sum(losses) / len(losses)
 
+def get_prompt_embeds_txt_ids(pipe, prompt, device, dtype=torch.float32):
+    p, t_ids = pipe.encode_prompt(prompt=prompt, device=device,)
+    p, t_ids = p.to(device, dtype), t_ids.to(device, dtype)
+    return p, t_ids
+
 def add_lora(transformer, rank):
     transformer_lora_config = LoraConfig(
         r=rank,
@@ -185,12 +202,14 @@ def add_lora(transformer, rank):
     transformer.add_adapter(transformer_lora_config)
     print(f"trainable params: {transformer.num_parameters(only_trainable=True)} || all params: {transformer.num_parameters()}")
 
-
+@torch.no_grad()
 def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
+    global Flux2KleinPipeline
     if not config.remove_text_encoder:
         # we use the vanilla setup besides our prepare_image_ids
         from diffusers import Flux2Transformer2DModel, Flux2KleinPipeline
         # we smuggle in our image ids by overriding both of these & calling scanpath "latents"...
+    
     Flux2KleinPipeline.prepare_image_ids = prepare_image_ids
     Flux2KleinPipeline.prepare_latents = prepare_latents
 
@@ -205,28 +224,47 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
     pipe = Flux2KleinPipeline.from_pretrained("black-forest-labs/FLUX.2-klein-4B", 
                                               transformer=transformer,
                                               # full precision weights
-                                              torch_dtype=torch.float32
+                                              torch_dtype=torch.float32,
+                                              # we'll put things onto cuda ourselves
+                                              device='cpu'
                                               ).to('cpu')
 
-    # TODO assert transformer dtype
-    transformer = pipe.transformer.to(device)
     if config.activation_checkpointing:
-        transformer.enable_gradient_checkpointing()
+        pipe.transformer.enable_gradient_checkpointing()
 
     if not config.use_cached_distilled_latents:
         pipe.vae = pipe.vae.to(device, dtype)
         if do_compile:
             pipe.vae = torch.compile(pipe.vae)
-        assert not any([p.device != torch.device('cuda:0') for p in pipe.vae.parameters()]), [p for p in pipe.vae.parameters() if p.device != torch.device('cuda:0')]
+        assert not any([p.device != torch.device('cuda:0') for p in pipe.vae.parameters()]), [n for n, p in pipe.vae.named_parameters() if p.device != torch.device('cuda:0')]
     else:
         # we can solely put our vae onto cuda only for our qual validation where we need decoding
-        pipe.vae = pipe.vae.to(dtype)
+        pipe.vae = pipe.vae.to('cpu', dtype)
 
+    pipe.cached_prompt, pipe.cached_txt_ids = None, None
+    pipe.cached_teacher_prompt, pipe.cached_teacher_txt_ids = None, None
     # NOTE we don't condition on text here
+    if isinstance(config.use_prompt, str):
+        logging.info('Caching prompt for our model.')
+        pipe.text_encoder = pipe.text_encoder.to(device, dtype)
+        pipe.cached_prompt, pipe.cached_txt_ids = get_prompt_embeds_txt_ids(pipe, 
+                                                                            config.use_prompt, 
+                                                                            config.device,)
+    if isinstance(config.teacher_use_prompt, str):
+        logging.info('Caching prompt for our teacher.')
+        # load up the text encoder if we haven't already
+        if not isinstance(config.use_prompt, str):
+            pipe.text_encoder = pipe.text_encoder.to(config.device)
+        pipe.cached_teacher_prompt, pipe.cached_teacher_txt_ids = get_prompt_embeds_txt_ids(pipe,
+                                                                                            config.teacher_use_prompt,
+                                                                                            config.device,)
     del pipe.text_encoder
+    torch.cuda.empty_cache()
+
+    pipe.transformer = pipe.transformer.to(device)
 
     if do_compile:
-        transformer = torch.compile(transformer)
+        pipe.transformer = torch.compile(pipe.transformer)
     
     model = Zoo(pipe, config.device, config.dtype, seed, config=config).to(device)
     return model

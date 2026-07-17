@@ -30,7 +30,7 @@
   [x] cache teacher outputs
     - vae latents saved as tensor with mapping from images
   - may be overfitting worse by only single trajectories per image
-    [] could use LoRA & switch on/off for student / teacher
+    [x] could use LoRA & switch on/off for student / teacher
   [x] qlora, train with adam, etc.
   [] support batch_size > 1
   [x] option to add back text encoder
@@ -38,8 +38,11 @@
   [x] use existing ckpt for guiding (boxes below) to proof out further changes.
   - put onto vast.ai for full finetune?
 [x] inference with saccade updating our image
-
-Next:
-[] train at low-ish-res but at AR that matches monitor
-  [] regenerate teacher i/o pairs
+[x] train at low-ish-res but at AR that matches monitor
+  [x] regenerate teacher i/o pairs
 [] light cfg on with/without gaze rope?
+
+
+[] Compare the case where the art piece hides from you versus the one that follows
+
+

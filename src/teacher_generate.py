@@ -70,7 +70,7 @@ def process_batch(pipe, batch, config, ):
     LAST_INFERENCE_LATENTS_TIMESTEPS_NOISE_PRED_TUPLES_LIST.append((initial_latent_to_save, None, None))
     pipe._callback_tensor_inputs = ["latents", "prompt_embeds", "noise_pred"]
 
-    im = pipe(image=image, prompt='Generate the image exactly as it was provided.', 
+    im = pipe(image=image, prompt='Generate the image as it was provided.', 
             width=w, height=h, num_inference_steps=4,
             latents=initial_latent,
             callback_on_step_end=collect_latents_on_step_end, 

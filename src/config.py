@@ -3,23 +3,25 @@ import torch
 
 @dataclass
 class Config:
-    # Model
+    ### Model
     model_path = None
     # model_path = './last_epoch_ckpt'
 
     remove_text_encoder: bool = False
-    lora_rank: int = 64
+    lora_rank: int = 8
     sample_teacher: bool = True
 
     quantize_adam: bool = False
     quantize_model: bool = False
 
 
-    # Hparams
+    ### Hparams
     batch_size: int = 1
     lr: float = 1e-4
+    use_prompt: str = 'The scene.'
+    teacher_use_prompt: str = 'Generate the image as it was provided.'
 
-    # Training
+    ### Training
     epochs: int = 3000000000000
     max_steps: int = 3000000000000
     max_val_steps: int = 128
@@ -32,16 +34,16 @@ class Config:
     activation_checkpointing: bool = True
     seed: int = 101
 
-    # Data
+    ### Data
     data_path: str = 'trainSet'
     val_data_split_ratio: int = .1
     num_workers: int = 20
     # width & height side lengths
-    resolution: tuple[int, int] = (512, 512)
+    resolution: tuple[int, int] = (768, 384)
 
-    use_cached_distilled_latents: bool = True
+    use_cached_distilled_latents: bool = False
 
-    # Logging
+    ### Logging
     save_path: str = './'
     freq: int = 100 # how often we save/log/etc.
 
@@ -50,7 +52,7 @@ def verify_config_validity(config):
     assert not (config.sample_teacher and config.use_cached_distilled_latents), (
         "There's no reason to try to use our cached latents and sample new ones"
     )
-    assert not (config.sample_teacher and not (config.remove_text_encoder and config.lora_rank)), (
+    assert not (config.sample_teacher and not (not config.remove_text_encoder and config.lora_rank)), (
         'sample_teacher is only allowed with LoRA and text encoders kept. '
         'we directly turn off our LoRA, grab a random input/output pair, then train on it. '
         'We want our teacher to already be there and undisturbed.'
