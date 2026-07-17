@@ -137,7 +137,7 @@ class Zoo(torch.nn.Module):
             prompt_embeds=prompt_embeds,
         ).images[0]
         image = scanpath_over_pil_image(image, scanpath[0])
-        image.save('latest_val.png')
+        image.save('latest_val_1.png')
 
         if offload_vae_back_to_cpu:
             self.pipe.vae = self.pipe.vae.to('cpu')
