@@ -38,7 +38,6 @@ from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 from diffusers.pipelines.flux2.image_processor import Flux2ImageProcessor
 from diffusers.pipelines.flux2.pipeline_output import Flux2PipelineOutput
 
-from data import scanpath_over_pil_image
 from modded_klein import prepare_image_ids
 
 if is_torch_xla_available():
@@ -412,10 +411,14 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
         width,
         dtype,
         device,
-        scanpath,
         generator: torch.Generator,
         latents: torch.Tensor | None = None,
     ):
+        # TODO 
+        # I don't want to repatch things right now lol
+        scanpath = latents
+        latents = None
+
         # VAE applies 8x compression on images but we must also account for packing which requires
         # latent height and width to be divisible by 2.
         height = 2 * (int(height) // (self.vae_scale_factor * 2))
@@ -606,12 +609,6 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
             `return_dict` is True, otherwise a `tuple`. When returning a tuple, the first element is a list with the
             generated images.
         """
-
-        offload_vae_back_to_cpu = False
-        # infer vae device from the all params
-        if any([p.device != torch.device('cuda:0') for p in self.vae.parameters()]):
-            offload_vae_back_to_cpu = True
-            self.vae = self.vae.to('cuda')
 
         # 1. Check inputs. Raise error if not correct
         self.check_inputs(
@@ -809,12 +806,6 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
         else:
             image = self.vae.decode(latents, return_dict=False)[0]
             image = self.image_processor.postprocess(image, output_type=output_type)
-            if overlay_scanpath:
-                # TODO batch_size = 1
-                image = [scanpath_over_pil_image(image[0], scanpath[0])]
-        
-        if offload_vae_back_to_cpu:
-            self.vae = self.vae.to('cpu')
 
         # Offload all models
         self.maybe_free_model_hooks()

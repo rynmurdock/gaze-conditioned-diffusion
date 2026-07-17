@@ -7,8 +7,9 @@ class Config:
     model_path = None
     # model_path = './last_epoch_ckpt'
     lora_rank: int = 16
-    quantize_adam: bool = True
+    quantize_adam: bool = False
     quantize_model: bool = False
+    remove_text_encoder: bool = False
 
     # Hparams
     batch_size: int = 1
@@ -17,9 +18,7 @@ class Config:
     # Training
     epochs: int = 3000000000000
     max_steps: int = 3000000000000
-
-    # TODO should be much higher
-    max_val_steps: int = 32
+    max_val_steps: int = 128
 
     do_compile: bool = True
     device: str = 'cuda:0'

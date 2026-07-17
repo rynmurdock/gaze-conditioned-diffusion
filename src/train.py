@@ -31,12 +31,14 @@ def main(config):
 
     model = get_model_and_tokenizer(config.model_path, config.device, config.dtype, config.seed, config.do_compile, config)
 
-    # trained_params = [p for n, p in model.pipe.transformer.named_parameters() if 'to_q' in n]
-    # not_trained = [p for n, p in model.pipe.transformer.named_parameters() if not 'to_q' in n]
-    optimizer, lr_sched = get_optimizer_and_lr_sched(model.pipe.transformer.parameters(), 
+    if config.lora_rank:
+        pattern = 'lora'
+        trained_params = [p for n, p in model.pipe.transformer.named_parameters() if pattern in n]
+        not_trained = [p for n, p in model.pipe.transformer.named_parameters() if not pattern in n]
+    optimizer, lr_sched = get_optimizer_and_lr_sched(trained_params, 
                                                      config.lr, config)
-    # for p in not_trained:
-    #     p.requires_grad = False
+    for p in not_trained:
+        p.requires_grad = False
     
     dataloader, val_dataloader = get_dataloader(config.data_path, config.val_data_split_ratio,
                                                  config.batch_size, config.num_workers, config.seed,
@@ -52,8 +54,9 @@ def main(config):
             if total_inds > config.max_steps:
                 logging.info('Saving our transformer & ending training')
                 if config.lora_rank:
-                    model.pipe.fuse_lora()
-                model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', )
+                    model.pipe.transformer.save_lora_adapter(f'{config.save_path}/last_epoch_ckpt',)
+                else:
+                    model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', )
                 sys.exit()
             if batch is None or \
                             (config.use_distilled_latents and batch.get('latents', None) is None):

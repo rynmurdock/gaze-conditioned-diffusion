@@ -50,6 +50,45 @@ from diffusers.models.normalization import AdaLayerNormContinuous
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
 
 
+# Copied from diffusers.pipelines.flux2.pipeline_flux2.Flux2Pipeline.prepare_latents
+def prepare_latents(
+    self,
+    batch_size,
+    num_latents_channels,
+    height,
+    width,
+    dtype,
+    device,
+    generator: torch.Generator,
+    latents: torch.Tensor | None = None,
+):
+    # TODO 
+    # I don't want to repatch things right now lol
+    scanpath = latents
+    latents = None
+
+    # VAE applies 8x compression on images but we must also account for packing which requires
+    # latent height and width to be divisible by 2.
+    height = 2 * (int(height) // (self.vae_scale_factor * 2))
+    width = 2 * (int(width) // (self.vae_scale_factor * 2))
+
+    shape = (batch_size, num_latents_channels * 4, height // 2, width // 2)
+    if isinstance(generator, list) and len(generator) != batch_size:
+        raise ValueError(
+            f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
+            f" size of {batch_size}. Make sure the batch size matches the length of the generators."
+        )
+    if latents is None:
+        latents = torch.randn(shape, generator=generator, device=device, dtype=dtype)
+    else:
+        latents = latents.to(device=device, dtype=dtype)
+
+    latent_ids = prepare_image_ids(latents, scanpath)
+    latent_ids = latent_ids.to(device)
+
+    latents = self._pack_latents(latents)  # [B, C, H, W] -> [B, H*W, C]
+    return latents, latent_ids
+
 def prepare_image_ids(
         image_latents: list[torch.Tensor],  # [(1, C, H, W), (1, C, H, W), ...]
         scanpath: list = [],

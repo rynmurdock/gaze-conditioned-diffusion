@@ -1,15 +1,15 @@
 
 import torch
 import logging
+from tqdm import tqdm
 
 from pipe_modded_klein import Flux2KleinPipeline
-from modded_klein import Flux2Transformer2DModel, prepare_image_ids
+from modded_klein import Flux2Transformer2DModel, prepare_image_ids, prepare_latents
+from data import scanpath_over_pil_image
 
 from diffusers import BitsAndBytesConfig
 import bitsandbytes as bnb
 from peft import LoraConfig
-
-
 
 def get_loss(model, image, scanpaths, 
              latents=None, timesteps=None, noise_pred=None,
@@ -79,12 +79,18 @@ class Zoo(torch.nn.Module):
         self.config = config
 
     def forward(self, latents, timesteps, gaze_image_ids):
+        prompt_embeds = None
+        txt_ids = None
+        if not self.config.remove_text_encoder:
+            prompt_embeds = torch.zeros(latents.shape[0], 1, 7680).to(latents.device, latents.dtype)
+            txt_ids = torch.zeros(latents.shape[0], 4)
+        
         velocity = self.pipe.transformer(
                 hidden_states=latents,  # (B, image_seq_len, C)
                 timestep=timesteps / 1000,
                 guidance=None,
-                encoder_hidden_states=None,
-                txt_ids=None,
+                encoder_hidden_states=prompt_embeds,
+                txt_ids=txt_ids,
                 img_ids=gaze_image_ids,  # B, image_seq_len, 4
                 return_dict=False,
         )[0]
@@ -92,43 +98,62 @@ class Zoo(torch.nn.Module):
 
     @torch.no_grad()
     def do_qual_val(self,):
-        generator = torch.Generator(device="cpu").manual_seed(self.seed)
-        generator_1 = torch.Generator(device="cpu").manual_seed(self.seed+789)
+        offload_vae_back_to_cpu = False
+        # infer vae device from the all params
+        if any([p.device != torch.device('cuda:0') for p in self.pipe.vae.parameters()]):
+            offload_vae_back_to_cpu = True
+            self.pipe.vae = self.pipe.vae.to('cuda')
 
-        images = self.pipe(
-            scanpath=torch.randint(0, 384, (1, 12, 2), generator=generator).to('cuda'),
+        generator = torch.Generator(device="cuda").manual_seed(self.seed)
+        generator_1 = torch.Generator(device="cuda").manual_seed(self.seed+789)
+
+        prompt_embeds = None
+        if not self.config.remove_text_encoder:
+            prompt_embeds = torch.zeros(1, 1, 7680).to(self.device, self.dtype)
+
+        scanpath = torch.randint(0, 384, (1, 12, 2), generator=generator, device='cuda')
+        image = self.pipe(
+            # just smuggling for our image ids
+            latents=scanpath,
             num_inference_steps=4,
             guidance_scale=1,
-            height=512,
-            width=512,
+            prompt_embeds=prompt_embeds,
+            height=self.config.resolution[1],
+            width=self.config.resolution[0],
             generator=generator,
-            overlay_scanpath=True,
-        ).images
-        images[0].save('latest_val.png')
+        ).images[0]
+        image = scanpath_over_pil_image(image, scanpath[0])
+        image.save('latest_val.png')
 
+        scanpath = torch.randint(0, 512, (1, 12, 2), generator=generator_1, device='cuda')
         # we modify just the scanpath here
-        images = self.pipe(
-            scanpath=torch.randint(0, 512, (1, 12, 2), generator=generator_1).to('cuda'),
+        image = self.pipe(
+            latents=scanpath,
             num_inference_steps=4,
             guidance_scale=1,
             height=self.config.resolution[1],
             width=self.config.resolution[0],
             generator=generator,
-            overlay_scanpath=True,
-        ).images
-        images[0].save('1_latest_val.png')
+            prompt_embeds=prompt_embeds,
+        ).images[0]
+        image = scanpath_over_pil_image(image, scanpath[0])
+        image.save('latest_val.png')
 
-        return images
+        if offload_vae_back_to_cpu:
+            self.pipe.vae = self.pipe.vae.to('cpu')
+
+        return image
     
     @torch.no_grad()
     def do_quant_val(self, val_dataloader, max_val_steps, dtype):
+        logging.info(f'Running validation for max {max_val_steps}')
         # fork_rng temporarily isolates changes
         with torch.random.fork_rng():
             # You can change the seed here locally
             torch.manual_seed(self.seed)
 
             losses = []
-            for index, batch in enumerate(val_dataloader):
+            for index, batch in tqdm(enumerate(val_dataloader)):
                 if batch is None:
                     continue
 
@@ -151,13 +176,23 @@ def add_lora(transformer, rank):
         r=rank,
         lora_alpha=rank, 
         init_lora_weights="gaussian",
-        target_modules='all-linear',
+        target_modules='all-linear'
+        # could train just the attention for image
+        # target_modules=['to_q', 'to_k', 'to_v', 'to_qkv'],
+        # exclude_modules=['add_',]
     )
     transformer.add_adapter(transformer_lora_config)
     print(f"trainable params: {transformer.num_parameters(only_trainable=True)} || all params: {transformer.num_parameters()}")
 
 
 def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
+    if not config.remove_text_encoder:
+        # we use the vanilla setup besides our prepare_image_ids
+        from diffusers import Flux2Transformer2DModel, Flux2KleinPipeline
+        # we smuggle in our image ids by overriding both of these & calling scanpath "latents"...
+    Flux2KleinPipeline.prepare_image_ids = prepare_image_ids
+    Flux2KleinPipeline.prepare_latents = prepare_latents
+
     transformer = Flux2Transformer2DModel.from_pretrained("black-forest-labs/FLUX.2-klein-4B" if path is None
                                                            else path, # we save without a subdir
                                                            subfolder=None if path else 'transformer',
@@ -171,6 +206,7 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
                                               # full precision weights
                                               torch_dtype=torch.float32
                                               ).to('cpu')
+
     # TODO assert transformer dtype
     transformer = pipe.transformer.to(device)
     if config.activation_checkpointing:
