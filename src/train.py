@@ -31,14 +31,14 @@ def main(config):
     np.random.seed(config.seed)
     torch.manual_seed(config.seed)
 
-    model = get_model_and_tokenizer(config.model_path, config.device, config.dtype, config.seed, config.do_compile, config)
+    model = get_model_and_tokenizer(config.model_path, config.device, 
+                                    config.dtype, config.seed, config.do_compile, config)
 
     if config.lora_rank:
         pattern = 'lora'
         trained_params = [p for n, p in model.pipe.transformer.named_parameters() if pattern in n]
         not_trained = [p for n, p in model.pipe.transformer.named_parameters() if not pattern in n]
-    optimizer, lr_sched = get_optimizer_and_lr_sched(trained_params, 
-                                                     config.lr, config)
+    optimizer, lr_sched = get_optimizer_and_lr_sched(trained_params, config.lr, config)
     for p in not_trained:
         p.requires_grad = False
     

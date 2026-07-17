@@ -24,9 +24,10 @@ class Config:
     ### Training
     epochs: int = 3000000000000
     max_steps: int = 3000000000000
-    max_val_steps: int = 128
+    max_val_steps: int = 64
 
-    do_compile: bool = True
+    # this seems to occasionally fail out of the blue after d5b46746eb7f329c793d65b76a09c96ef9bfdd97
+    do_compile: bool = False
     device: str = 'cuda:0'
     
     # specifically for *mixed precision*

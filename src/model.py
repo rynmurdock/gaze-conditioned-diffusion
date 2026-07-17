@@ -42,6 +42,14 @@ def get_loss(model, image, scanpaths,
 
         gaze_image_ids = prepare_image_ids([x0], scanpaths).to(x0.device)
         typical_image_ids = Flux2KleinPipeline._prepare_image_ids([x0]).to(x0.device)
+        # TODO this duplicates vae encoding
+        image_latents, image_latent_ids = model.pipe.prepare_image_latents(
+                images=[image],
+                batch_size=x0.shape[0],
+                generator=torch.Generator(device='cuda'),
+                device=x0.device,
+                dtype=x0.dtype,
+            )
         x0 = model.pipe._pack_latents(x0)
 
         noise = torch.randn_like(x0)
@@ -54,11 +62,15 @@ def get_loss(model, image, scanpaths,
 
         if sample_teacher:
             model.pipe.transformer.disable_lora()
-            teacher_noise_pred = model(latents, 
-                       timesteps=timesteps, image_ids=typical_image_ids, 
+            
+            latent_model_input = torch.cat([latents, image_latents], dim=1).to(model.pipe.transformer.dtype)
+            latent_image_ids = torch.cat([typical_image_ids, image_latent_ids], dim=1)
+            teacher_noise_pred = model(latent_model_input, 
+                       timesteps=timesteps, image_ids=latent_image_ids, 
                        prompt_embeds=model.pipe.cached_teacher_prompt,
                        txt_ids=model.pipe.cached_teacher_txt_ids,
                        )
+            teacher_noise_pred = teacher_noise_pred[:, : latents.size(1) :]
             model.pipe.transformer.enable_lora()
 
 
