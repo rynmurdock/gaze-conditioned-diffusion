@@ -13,29 +13,6 @@ from PIL import Image, ImageDraw
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import functional as TF
 
-
-
-# not required for teacher (we'll start by trying in:identity:out)
-# but may be useful later.
-def scanpath_over_pil_image(pil_img, scanpath: np.array,
-                             max_size=30, min_size=8, color=(255, 0, 0, 160)):
-    """
-    scanpath: (T, 2 or 3) array of (x, y) points, in temporal order.
-    Point size shrinks with index -> first fixation is biggest.
-    """
-    img = pil_img.convert("RGBA")
-    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-
-    T = len(scanpath)
-    sizes = np.linspace(max_size, min_size, T)
-
-    for i, (x, y) in enumerate(scanpath[:, :2]):
-        r = sizes[i] / 2
-        draw.ellipse([x - r, y - r, x + r, y + r], fill=color)
-
-    return Image.alpha_composite(img, overlay)
-
 def _iter_records(obj):
     """
     Recursively walk a (possibly nested) numpy object array - the shape
@@ -152,7 +129,13 @@ class ScanpathDataset(Dataset):
 
         scanpath = torch.from_numpy(fix)
 
+        scanpath_sans_contents = scanpath_over_pil_image(scanpath, pil_img, just_path=True)
+        # (3, H, W), values in [-1, 1]
+        scanpath_sans_contents = TF.to_tensor(scanpath_sans_contents) * 2 - 1
+        
+
         ex = {
+            "scanpath_sans_contents": scanpath_sans_contents,
             "pil_img": pil_img,
             "image": img_tensor,
             "scanpath": scanpath,
@@ -196,6 +179,7 @@ def collate_scanpaths(batch):
     """
     try:
         images = torch.stack([b["image"] for b in batch], dim=0)
+        scanpath_sans_contents = torch.stack([b["scanpath_sans_contents"] for b in batch], dim=0)
 
         latents = None
         timesteps = None
@@ -220,6 +204,7 @@ def collate_scanpaths(batch):
         image_paths = [b["img_path"] for b in batch]
 
         return {
+            "scanpath_sans_contents": scanpath_sans_contents,
             "images": images,          # (B, 3, H, W)
             "scanpaths": scanpaths,    # (B, T_max, C), zero-padded past `lengths`
             "lengths": lengths,        # (B,)
@@ -271,7 +256,7 @@ if __name__ == "__main__":
     dataset = ScanpathDataset(
         root="trainSet",
         mat_path="trainSet/allFixData.mat",
-        stim_size=(384, 768),
+        stim_size=(768, 384),
     )
     loader = DataLoader(dataset, batch_size=8, shuffle=True, collate_fn=collate_scanpaths)
 

@@ -40,7 +40,14 @@
 [x] inference with saccade updating our image
 [x] train at low-ish-res but at AR that matches monitor
   [x] regenerate teacher i/o pairs
+[x] K timesteps instead of full T
+[x] condition on points as edit image instead of RoPE
+[] could look cool to predict the large/small shrinking & appearing points as well
+
 [] light cfg on with/without gaze rope?
+
+[] Wandb-esque html
+  [] I don't need even tensoboard just the last val, train plots & images
 
 
 [] Compare the case where the art piece hides from you versus the one that follows

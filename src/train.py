@@ -91,10 +91,11 @@ def main(config):
                 plt.clf()
 
             loss, loss_logging_dict = get_loss(model, image, scanpaths, 
+                                               config=config,
                                                latents=batch.get('latents'),
                                                timesteps=batch.get('timesteps'),
                                                noise_pred=batch.get('noise_preds'),
-                                               sample_teacher=config.sample_teacher
+                                               scanpath_sans_contents=batch.get('scanpath_sans_contents')
                                                )
             if total_inds % config.freq == 0:
                 mse_loss = loss_logging_dict.get('mse_loss')

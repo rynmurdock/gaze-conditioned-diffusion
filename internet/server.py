@@ -72,8 +72,8 @@ def coords_to_klein_out(coords) -> bytes:
         image = pipe(
             scanpath=coords,
             overlay_scanpath=True,
-            height=512,
-            width=512,
+            height=384,
+            width=768,
             guidance_scale=1.0,
             num_inference_steps=4,
             generator=torch.Generator(device=device).manual_seed(SEED)
@@ -89,7 +89,7 @@ def coords_to_klein_out(coords) -> bytes:
 def process_gaze(x: float, y: float, width: float, height: float, t: float) -> bytes:
     global LAST_12_POINTS
 
-    x1, y1 = x * 512, y * 512
+    x1, y1 = x * 764, y * 384
     LAST_12_POINTS.append((x1, y1))
     if len(LAST_12_POINTS) > 12:
         LAST_12_POINTS.pop(0)

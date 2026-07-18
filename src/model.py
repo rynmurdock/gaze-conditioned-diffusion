@@ -4,16 +4,20 @@ import logging
 from tqdm import tqdm
 
 from pipe_modded_klein import Flux2KleinPipeline
-from modded_klein import Flux2Transformer2DModel, prepare_image_ids, prepare_latents
+from modded_klein import Flux2Transformer2DModel, prepare_image_ids, prepare_latents, get_inf_timesteps
 from data import scanpath_over_pil_image
 
 from diffusers import BitsAndBytesConfig
 import bitsandbytes as bnb
 from peft import LoraConfig
 
-def get_loss(model, image, scanpaths, 
-             latents=None, timesteps=None, noise_pred=None,
-             dtype=None, sample_teacher=False):
+def get_loss(model, image, scanpaths, config,
+             latents=None, timesteps=None, noise_pred=None, scanpath_sans_contents=None,
+             dtype=None,):
+    sample_teacher = config.sample_teacher
+    scanpath_as_edit_image = config.scanpath_as_edit_image
+
+
     dtype = model.dtype if not dtype else dtype
     with torch.no_grad():
         # rng drop out inputs
@@ -42,21 +46,33 @@ def get_loss(model, image, scanpaths,
 
         gaze_image_ids = prepare_image_ids([x0], scanpaths).to(x0.device)
         typical_image_ids = Flux2KleinPipeline._prepare_image_ids([x0]).to(x0.device)
-        # TODO this duplicates vae encoding
-        image_latents, image_latent_ids = model.pipe.prepare_image_latents(
-                images=[image],
-                batch_size=x0.shape[0],
-                generator=torch.Generator(device='cuda'),
-                device=x0.device,
-                dtype=x0.dtype,
-            )
+        
+        if sample_teacher:
+            # TODO this duplicates vae encoding
+            image_latents, image_latent_ids = model.pipe.prepare_image_latents(
+                    images=[image],
+                    batch_size=x0.shape[0],
+                    generator=torch.Generator(device='cuda'),
+                    device=x0.device,
+                    dtype=x0.dtype,
+                )
+        if scanpath_as_edit_image:
+            hint_latents, hint_ids = model.pipe.prepare_image_latents(
+                    images=[scanpath_sans_contents],
+                    batch_size=x0.shape[0],
+                    generator=torch.Generator(device='cuda'),
+                    device=x0.device,
+                    dtype=x0.dtype,
+                )
         x0 = model.pipe._pack_latents(x0)
-
         noise = torch.randn_like(x0)
 
         if latents is None:
-            # TODO don't use uniform sampling (can try logit normal & also just teacher's schedule)
-            timesteps = torch.randint(0, 1000, (noise.shape[0],)).to(x0.device)
+            # TODO don't use uniform sampling (can try logit normal &/or just teacher's in schedule)
+            # timesteps = torch.randint(0, 1000, (noise.shape[0],)).to(x0.device)
+            timesteps = get_inf_timesteps(model.pipe.scheduler, x0, num_inference_steps=4, device='cuda')
+            k = torch.randint(0, 4, (noise.shape[0],)).to(x0.device)
+            timesteps = timesteps[k]
             sigma = timesteps / 1000
             latents = sigma * noise + (1 - sigma) * x0
 
@@ -75,11 +91,17 @@ def get_loss(model, image, scanpaths,
 
 
     with torch.autocast(device_type='cuda', enabled=True, dtype=dtype):
-        output = model(latents, 
-                       timesteps=timesteps, image_ids=gaze_image_ids,
+        if scanpath_as_edit_image:
+            latent_model_input = torch.cat([latents, hint_latents], dim=1).to(model.pipe.transformer.dtype)
+            latent_image_ids = torch.cat([typical_image_ids, hint_ids], dim=1)
+        output = model(latents if not scanpath_as_edit_image else latent_model_input, 
+                       timesteps=timesteps, image_ids=gaze_image_ids if not scanpath_as_edit_image else latent_image_ids,
                        prompt_embeds=model.pipe.cached_prompt,
                        txt_ids=model.pipe.cached_txt_ids,
                        )
+        if scanpath_as_edit_image:
+            output = output[:, : latents.size(1) :]
+        
 
     if noise_pred is None:
         target = noise - x0
@@ -93,6 +115,18 @@ def get_loss(model, image, scanpaths,
 
     logging_dict = {'mse_loss': mse_loss.item(),}
     return loss, logging_dict
+
+def get_random_scanpath_cond_im(width, height, generator, ):
+        scanpath_xw = torch.randint(0, width, 
+                                    (1, 12, 1), generator=generator, device='cuda')
+        scanpath_yh = torch.randint(0, height, 
+                                    (1, 12, 1), generator=generator, device='cuda')
+        scanpath = torch.cat([scanpath_xw, scanpath_yh], -1)
+        cond_img = scanpath_over_pil_image(scanpath[0], 
+                                           w=width, 
+                                           h=height, 
+                                           just_path=True)
+        return cond_img, scanpath
 
 
 class Zoo(torch.nn.Module):
@@ -128,40 +162,32 @@ class Zoo(torch.nn.Module):
             offload_vae_back_to_cpu = True
             self.pipe.vae = self.pipe.vae.to('cuda')
 
-        generator = torch.Generator(device="cuda").manual_seed(self.seed)
-        generator_1 = torch.Generator(device="cuda").manual_seed(self.seed+789)
-
         prompt_embeds = None
-        if not self.config.remove_text_encoder:
+        if not self.config.remove_text_encoder and not isinstance(self.config.use_prompt, str):
             prompt_embeds = torch.zeros(1, 1, 7680).to(self.device, self.dtype)
+        else:
+            prompt_embeds = self.pipe.cached_prompt
 
-        scanpath = torch.randint(0, 384, (1, 12, 2), generator=generator, device='cuda')
-        image = self.pipe(
-            # just smuggling for our image ids
-            latents=scanpath,
-            num_inference_steps=4,
-            guidance_scale=1,
-            prompt_embeds=prompt_embeds,
-            height=self.config.resolution[1],
-            width=self.config.resolution[0],
-            generator=generator,
-        ).images[0]
-        image = scanpath_over_pil_image(image, scanpath[0])
-        image.save('latest_val.png')
+        width, height = self.config.resolution
 
-        scanpath = torch.randint(0, 512, (1, 12, 2), generator=generator_1, device='cuda')
-        # we modify just the scanpath here
-        image = self.pipe(
-            latents=scanpath,
-            num_inference_steps=4,
-            guidance_scale=1,
-            height=self.config.resolution[1],
-            width=self.config.resolution[0],
-            generator=generator,
-            prompt_embeds=prompt_embeds,
-        ).images[0]
-        image = scanpath_over_pil_image(image, scanpath[0])
-        image.save('latest_val_1.png')
+        latent_seed_generator = torch.Generator(device="cuda").manual_seed(self.seed)
+        for ind, this_seed in enumerate([self.seed, self.seed+179]):
+            scanpath_generator = torch.Generator(device="cuda").manual_seed(this_seed)
+            cond_img, scanpath = get_random_scanpath_cond_im(width, height, 
+                                                             generator=scanpath_generator)
+            image = self.pipe(
+                # just smuggling for our image ids
+                image=cond_img if self.config.scanpath_as_edit_image else None,
+                latents=scanpath if not self.config.scanpath_as_edit_image else None,
+                num_inference_steps=4,
+                guidance_scale=1,
+                prompt_embeds=prompt_embeds,
+                height=height,
+                width=width,
+                generator=latent_seed_generator,
+            ).images[0]
+            image = scanpath_over_pil_image(scanpath[0], image)
+            image.save(f'latest_val_{ind}.png')
 
         if offload_vae_back_to_cpu:
             self.pipe.vae = self.pipe.vae.to('cpu')
@@ -185,11 +211,12 @@ class Zoo(torch.nn.Module):
                 image = image.to(self.device, dtype)
                 scanpaths = scanpaths.to(self.device)
                 loss, loss_logging_dict = get_loss(self, 
-                                                image, scanpaths, 
+                                               image, scanpaths, 
+                                               config=self.config,
                                                latents=batch.get('latents'),
                                                timesteps=batch.get('timesteps'),
                                                noise_pred=batch.get('noise_preds'),
-                                               sample_teacher=self.config.sample_teacher
+                                               scanpath_sans_contents=batch.get('scanpath_sans_contents'),
                                                )
                 losses.append(loss.item())
                 if index > max_val_steps:
@@ -218,12 +245,13 @@ def add_lora(transformer, rank):
 def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
     global Flux2KleinPipeline
     if not config.remove_text_encoder:
-        # we use the vanilla setup besides our prepare_image_ids
+        # we can use the vanilla setup besides our prepare_image_ids in this case
         from diffusers import Flux2Transformer2DModel, Flux2KleinPipeline
         # we smuggle in our image ids by overriding both of these & calling scanpath "latents"...
     
-    Flux2KleinPipeline.prepare_image_ids = prepare_image_ids
-    Flux2KleinPipeline.prepare_latents = prepare_latents
+    if not config.scanpath_as_edit_image:
+        Flux2KleinPipeline.prepare_image_ids = prepare_image_ids
+        Flux2KleinPipeline.prepare_latents = prepare_latents
 
     transformer = Flux2Transformer2DModel.from_pretrained("black-forest-labs/FLUX.2-klein-4B" if path is None
                                                            else path, # we save without a subdir
@@ -286,5 +314,5 @@ def get_optimizer_and_lr_sched(params, lr, config):
         optimizer = bnb.optim.Adam8bit(params, lr=lr)
     else:
         optimizer = torch.optim.AdamW(params, lr=lr)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=1000, T_mult=1)
+    scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, total_iters=5)
     return optimizer, scheduler

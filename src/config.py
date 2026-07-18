@@ -8,7 +8,8 @@ class Config:
     # model_path = './last_epoch_ckpt'
 
     remove_text_encoder: bool = False
-    lora_rank: int = 8
+    scanpath_as_edit_image: bool = True
+    lora_rank: int = 16
     sample_teacher: bool = True
 
     quantize_adam: bool = False
@@ -18,15 +19,16 @@ class Config:
     ### Hparams
     batch_size: int = 1
     lr: float = 1e-4
-    use_prompt: str = 'The scene.'
-    teacher_use_prompt: str = 'Generate the image as it was provided.'
+    use_prompt: str = ''
+    teacher_use_prompt: str = 'Generate the image exactly as it was provided.'
 
     ### Training
     epochs: int = 3000000000000
     max_steps: int = 3000000000000
-    max_val_steps: int = 64
+    max_val_steps: int = 128
 
-    # this seems to occasionally fail out of the blue after d5b46746eb7f329c793d65b76a09c96ef9bfdd97
+    # this seems to break after d5b46746eb7f329c793d65b76a09c96ef9bfdd97
+    # likely do to dynamic shapes being borked on some torch versions
     do_compile: bool = False
     device: str = 'cuda:0'
     
