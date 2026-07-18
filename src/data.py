@@ -13,6 +13,39 @@ from PIL import Image, ImageDraw
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import functional as TF
 
+
+
+# not required for teacher (we'll start by trying in:identity:out)
+# but may be useful later.
+def scanpath_over_pil_image(scanpath: np.array, pil_img=None, w=None, h=None,
+                             max_size=30, min_size=8, color=(255, 0, 0, 160),
+                             just_path=False):
+    """
+    scanpath: (T, 2 or 3) array of (x, y) points, in temporal order.
+    Point size shrinks with index -> first fixation is biggest.
+
+    just_path: if True, draw the overlay onto a blank (transparent/white)
+               canvas instead of compositing onto the original image.
+    """
+
+    if just_path:
+        im_size = pil_img.size if pil_img else (w, h)
+        img = Image.new("RGBA", im_size, (255, 255, 255, 255))
+    else:
+        img = pil_img.convert("RGBA")
+
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    T = len(scanpath)
+    sizes = np.linspace(max_size, min_size, T)
+
+    for i, (x, y) in enumerate(scanpath[:, :2]):
+        r = sizes[i] / 2
+        draw.ellipse([x - r, y - r, x + r, y + r], fill=color)
+
+    return Image.alpha_composite(img, overlay).convert("RGB")
+
 def _iter_records(obj):
     """
     Recursively walk a (possibly nested) numpy object array - the shape
