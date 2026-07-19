@@ -9,7 +9,7 @@ class Config:
 
     remove_text_encoder: bool = False
     scanpath_as_edit_image: bool = True
-    lora_rank: int = 16
+    lora_rank: int = 128
     sample_teacher: bool = True
     just_inf_timesteps: bool = False
 
@@ -20,8 +20,9 @@ class Config:
     ### Hparams
     batch_size: int = 1
     lr: float = 1e-4
-    use_prompt: str = ''
-    teacher_use_prompt: str = 'Generate the image exactly as it was provided.'
+    use_prompt: str = 'Generate the image.'
+    # TODO test how we can make this give the same re structure but not identical results?
+    teacher_use_prompt: str = 'Generate this image.'
 
     ### Training
     epochs: int = 3000000000000
@@ -30,7 +31,7 @@ class Config:
 
     # this seems to break after d5b46746eb7f329c793d65b76a09c96ef9bfdd97
     # likely do to dynamic shapes being borked on some torch versions
-    do_compile: bool = False
+    do_compile: bool = True
     device: str = 'cuda:0'
     
     # specifically for *mixed precision*
@@ -49,7 +50,7 @@ class Config:
 
     ### Logging
     save_path: str = './'
-    freq: int = 800 # how often we save/log/etc.
+    freq: int = 100 # how often we save/log/etc.
 
 def verify_config_validity(config):
     assert config.batch_size == 1, 'We do not support batch_size > 1 yet.'

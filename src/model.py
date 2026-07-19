@@ -113,9 +113,8 @@ def get_loss(model, image, scanpaths, config,
                        )
         if scanpath_as_edit_image:
             output = output[:, : latents.size(1) :]
-        
 
-    if noise_pred is None:
+    if noise_pred is None and not sample_teacher:
         target = noise - x0
     else:
         target = teacher_noise_pred

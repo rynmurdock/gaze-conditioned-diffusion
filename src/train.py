@@ -56,7 +56,7 @@ def main(config):
             if total_inds > config.max_steps:
                 logging.info('Saving our transformer & ending training')
                 if config.lora_rank:
-                    model.pipe.transformer.save_lora_adapter(f'{config.save_path}/last_epoch_ckpt/', from_pt=True)
+                    model.pipe.transformer.save_lora_adapter(f'{config.save_path}/last_epoch_ckpt/', )
                 else:
                     model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', from_pt=True)
                 sys.exit()
@@ -84,11 +84,15 @@ def main(config):
                         train_losses.append(sum(inner_train_losses)/len(inner_train_losses))
                     inner_train_losses = []
 
-                train_losses = train_losses
                 plt.plot(train_losses)
                 plt.plot(validation_losses)
                 plt.savefig('latest_loss_curves.png')
                 plt.clf()
+                if total_inds == 2 * config.freq:
+                    # to save our scaling, we remove the first 2 metric points after they're done
+                    train_losses = []
+                    validation_losses = []
+
 
             loss, loss_logging_dict = get_loss(model, image, scanpaths, 
                                                config=config,
@@ -107,7 +111,8 @@ def main(config):
             if total_inds % config.freq == 0:
                 logging.info('Saving our transformer')
                 if config.lora_rank:
-                    model.pipe.transformer.save_lora_adapter(f'{config.save_path}/last_epoch_ckpt/', from_pt=True)
+                    # from_pt=True can't be used here
+                    model.pipe.transformer.save_lora_adapter(f'{config.save_path}/last_epoch_ckpt/', )
                 else:
                     model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', from_pt=True)
                 
