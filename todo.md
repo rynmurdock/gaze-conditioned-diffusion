@@ -52,5 +52,5 @@
 [] smoothing over scanpath
 [] scanpath statistics (e.g. average length)
 [] compare the case where the art piece hides from you versus the one that follows
-
+[] remove grey padding on data
 

@@ -9,20 +9,19 @@ class Config:
 
     remove_text_encoder: bool = False
     scanpath_as_edit_image: bool = True
-    lora_rank: int = 128
+    lora_rank: int = 32
     sample_teacher: bool = True
-    just_inf_timesteps: bool = False
+    just_inf_timesteps: bool = True
 
     quantize_adam: bool = False
     quantize_model: bool = False
 
-
     ### Hparams
     batch_size: int = 1
-    lr: float = 1e-4
-    use_prompt: str = 'Generate the image.'
+    lr: float = 2e-4
+    use_prompt: str = ''
     # TODO test how we can make this give the same re structure but not identical results?
-    teacher_use_prompt: str = 'Generate this image.'
+    teacher_use_prompt: str = 'Generate this image as it was given.'
 
     ### Training
     epochs: int = 3000000000000
@@ -31,7 +30,7 @@ class Config:
 
     # this seems to break after d5b46746eb7f329c793d65b76a09c96ef9bfdd97
     # likely do to dynamic shapes being borked on some torch versions
-    do_compile: bool = True
+    do_compile: bool = False
     device: str = 'cuda:0'
     
     # specifically for *mixed precision*

@@ -15,17 +15,18 @@ from torchvision.transforms import functional as TF
 
 
 
-# not required for teacher (we'll start by trying in:identity:out)
-# but may be useful later.
 def scanpath_over_pil_image(scanpath: np.array, pil_img=None, w=None, h=None,
                              max_size=30, min_size=8, color=(255, 0, 0, 160),
+                             line_color=None, line_width=2,
                              just_path=False):
     """
     scanpath: (T, 2 or 3) array of (x, y) points, in temporal order.
     Point size shrinks with index -> first fixation is biggest.
+    Consecutive points are connected with a line.
 
     just_path: if True, draw the overlay onto a blank (transparent/white)
                canvas instead of compositing onto the original image.
+    line_color: color for connecting lines; defaults to `color` if None.
     """
 
     if just_path:
@@ -39,8 +40,19 @@ def scanpath_over_pil_image(scanpath: np.array, pil_img=None, w=None, h=None,
 
     T = len(scanpath)
     sizes = np.linspace(max_size, min_size, T)
+    points = scanpath[:, :2]
 
-    for i, (x, y) in enumerate(scanpath[:, :2]):
+    if line_color is None:
+        line_color = color
+
+    # draw connecting lines first, so points render on top
+    for i in range(T - 1):
+        x0, y0 = points[i]
+        x1, y1 = points[i + 1]
+        draw.line([(x0, y0), (x1, y1)], fill=line_color, width=line_width)
+
+    # draw points
+    for i, (x, y) in enumerate(points):
         r = sizes[i] / 2
         draw.ellipse([x - r, y - r, x + r, y + r], fill=color)
 
@@ -92,13 +104,15 @@ class ScanpathDataset(Dataset):
     IMG_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff")
 
     def __init__(self, root, mat_path, stim_size=(512, 512), 
-                 coord_order="xy", use_cached_distilled_latents=False):
+                 coord_order="xy", use_cached_distilled_latents=False,
+                 ):
         """
         root:        dataset root containing `stimuli/`
         mat_path:    path to the consolidated .mat, e.g. 'trainSet/allFixData.mat'
         stim_size:   (W, H) to resize every stimulus (and rescale coords) to
         coord_order: 'xy' if data columns are [x, y]; 'yx' if [y, x]
         """
+
         self.use_cached_distilled_latents = use_cached_distilled_latents
         self.root = root
         # Keys are already relative paths like 'Action/001.jpg', matching
@@ -147,6 +161,9 @@ class ScanpathDataset(Dataset):
         # --- stimulus ---
         pil_img = Image.open(img_path).convert("RGB")
         orig_w, orig_h = pil_img.size
+        left, right = _detect_horizontal_pad(np.asarray(pil_img))
+        pil_img = pil_img.crop((left, 0, right, orig_h))
+        crop_w = pil_img.width
         pil_img = pil_img.resize(self.stim_size, Image.BILINEAR)
         img_tensor = TF.to_tensor(pil_img) * 2 - 1  # (3, H, W), values in [-1, 1]
 
@@ -154,14 +171,16 @@ class ScanpathDataset(Dataset):
         fix = fix.copy()
         if self.coord_order == "yx":
             fix = fix[:, [1, 0]]
+        
+        fix[:, 0] -= left
 
-        scale_x = self.stim_size[0] / orig_w
+        scale_x = self.stim_size[0] / crop_w
         scale_y = self.stim_size[1] / orig_h
         fix[:, 0] *= scale_x
         fix[:, 1] *= scale_y
 
-        scanpath = torch.from_numpy(fix)
 
+        scanpath = torch.from_numpy(fix)
         scanpath_sans_contents = scanpath_over_pil_image(scanpath, pil_img, just_path=True)
         # (3, H, W), values in [-1, 1]
         scanpath_sans_contents = TF.to_tensor(scanpath_sans_contents) * 2 - 1
@@ -203,7 +222,27 @@ class ScanpathDataset(Dataset):
 
         return ex
     
+def _detect_horizontal_pad(arr, pad_color=(126, 126, 126), tol=10):
+    """
+    arr: (H, W, 3) uint8 array.
+    Returns (left, right) such that arr[:, left:right] is the real content;
+    a column only counts as padding if every pixel in it is within `tol`
+    of pad_color (tolerant of mild JPEG ringing near the border).
+    """
+    diff = np.abs(arr.astype(np.int16) - np.array(pad_color, dtype=np.int16)).max(axis=2)
+    col_is_pad = (diff <= tol).all(axis=0)  # (W,)
 
+    W = arr.shape[1]
+    left = 0
+    while left < W and col_is_pad[left]:
+        left += 1
+    right = W
+    while right > left and col_is_pad[right - 1]:
+        right -= 1
+
+    if right <= left:      # degenerate/all-pad safety net
+        return 0, W
+    return left, right
 
 def collate_scanpaths(batch):
     """

@@ -244,7 +244,7 @@ def get_prompt_embeds_txt_ids(pipe, prompt, device, dtype=torch.float32):
 def add_lora(transformer, rank):
     transformer_lora_config = LoraConfig(
         r=rank,
-        lora_alpha=rank, 
+        lora_alpha=rank * 2, 
         init_lora_weights="gaussian",
         target_modules='all-linear'
         # could train just the attention for image

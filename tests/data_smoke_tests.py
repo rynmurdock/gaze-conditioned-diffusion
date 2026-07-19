@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from matio import load_from_mat
 from PIL import Image
 
-from src.data import _iter_records, _scalar_str
+from src.data import _iter_records, _scalar_str, get_dataloader
 
 ROOT = "trainSet"
 MAT_PATH = "trainSet/allFixData.mat"
@@ -23,6 +23,17 @@ STIM_DIR = os.path.join(ROOT, "Stimuli")
 N_SAMPLES = 6
 OUT_PATH = "scanpath_check.png"
 
+def collect_from_dataloader():
+    pairs = []
+    dataloader, _ = get_dataloader('trainSet', .1, 1, 11, 
+                                   seed=0, resolution=(512, 512), 
+                                   use_cached_distilled_latents=False)
+    for ind, d in enumerate(dataloader):
+        d['pil_images'][0].save('pil_im.jpg')
+        pairs.append((str(ind), d['pil_images'][0], '_', d['scanpaths'][0]))
+        if ind > 5:
+            return pairs
+    return pairs
 
 def collect_samples(n=N_SAMPLES, seed=0):
     mat = load_from_mat(MAT_PATH)
@@ -49,8 +60,9 @@ def plot_samples(samples, out_path=OUT_PATH):
     fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 5 * rows))
     axes = axes.flatten() if n > 1 else [axes]
 
-    for ax, (key, img_path, subj, fix) in zip(axes, samples):
-        img = Image.open(img_path).convert("RGB")
+    for ax, (key, img, subj, fix) in zip(axes, samples):
+        if not isinstance(img, Image.Image):
+            img = Image.open(img).convert("RGB")
         ax.imshow(img)
         x, y = fix[:, 0], fix[:, 1]
         ax.plot(x, y, "-", color="cyan", linewidth=1, alpha=0.8)
@@ -73,3 +85,6 @@ def plot_samples(samples, out_path=OUT_PATH):
 if __name__ == "__main__":
     samples = collect_samples()
     plot_samples(samples)
+
+    samples_processed = collect_from_dataloader()
+    plot_samples(samples_processed, out_path='scanpath_dataloader.png')

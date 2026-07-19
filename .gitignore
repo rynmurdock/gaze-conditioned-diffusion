@@ -7,3 +7,4 @@
 *.jpeg
 *.mat
 **/__pycache__/**
+last_epoch_ckpt copy/
