@@ -2,12 +2,14 @@
 import torch
 import logging
 from tqdm import tqdm
+from copy import deepcopy
 
 from pipe_modded_klein import Flux2KleinPipeline
 from modded_klein import Flux2Transformer2DModel, prepare_image_ids, prepare_latents, get_inf_timesteps
 from data import scanpath_over_pil_image
 
 from diffusers import BitsAndBytesConfig
+from diffusers.training_utils import compute_density_for_timestep_sampling
 import bitsandbytes as bnb
 from peft import LoraConfig
 
@@ -69,10 +71,20 @@ def get_loss(model, image, scanpaths, config,
 
         if latents is None:
             # TODO don't use uniform sampling (can try logit normal &/or just teacher's in schedule)
-            # timesteps = torch.randint(0, 1000, (noise.shape[0],)).to(x0.device)
-            timesteps = get_inf_timesteps(model.pipe.scheduler, x0, num_inference_steps=4, device='cuda')
-            k = torch.randint(0, 4, (noise.shape[0],)).to(x0.device)
-            timesteps = timesteps[k]
+            if config.just_inf_timesteps:
+                timesteps = get_inf_timesteps(model.pipe.scheduler, x0, num_inference_steps=4, device='cuda')
+                k = torch.randint(0, 4, (noise.shape[0],)).to(x0.device)
+                timesteps = timesteps[k]
+            else:
+                u = compute_density_for_timestep_sampling(
+                    weighting_scheme='logit_normal',
+                    batch_size=x0.shape[0],
+                    logit_mean=0,
+                    logit_std=1,
+                )
+                indices = (u * model.noise_scheduler_copy.config.num_train_timesteps).long()
+                timesteps = model.noise_scheduler_copy.timesteps[indices].to(device=x0.device)
+
             sigma = timesteps / 1000
             latents = sigma * noise + (1 - sigma) * x0
 
@@ -137,6 +149,8 @@ class Zoo(torch.nn.Module):
         # NOTE: dtype is the mixed dtype; transformer is still in float32
         self.device, self.dtype = device, dtype
         self.config = config
+
+        self.noise_scheduler_copy = deepcopy(pipe.scheduler)
 
     def forward(self, latents, timesteps, image_ids, prompt_embeds=None, txt_ids=None):
         if prompt_embeds is None:

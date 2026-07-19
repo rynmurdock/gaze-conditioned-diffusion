@@ -56,9 +56,9 @@ def main(config):
             if total_inds > config.max_steps:
                 logging.info('Saving our transformer & ending training')
                 if config.lora_rank:
-                    model.pipe.transformer.save_lora_adapter(f'{config.save_path}/last_epoch_ckpt',)
+                    model.pipe.transformer.save_lora_adapter(f'{config.save_path}/last_epoch_ckpt/', from_pt=True)
                 else:
-                    model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', )
+                    model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', from_pt=True)
                 sys.exit()
             if batch is None or \
                             (config.use_cached_distilled_latents and batch.get('latents', None) is None):
@@ -97,12 +97,6 @@ def main(config):
                                                noise_pred=batch.get('noise_preds'),
                                                scanpath_sans_contents=batch.get('scanpath_sans_contents')
                                                )
-            if total_inds % config.freq == 0:
-                mse_loss = loss_logging_dict.get('mse_loss')
-                logging.info(
-                    f'Train MSE: {mse_loss}, '
-                    f'Weighted Total: {loss.item()}'
-                )
             inner_train_losses.append(loss.item())
             loss.backward()
             optimizer.step()
@@ -112,8 +106,11 @@ def main(config):
             total_inds += 1
             if total_inds % config.freq == 0:
                 logging.info('Saving our transformer')
-                model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt',)
-
+                if config.lora_rank:
+                    model.pipe.transformer.save_lora_adapter(f'{config.save_path}/last_epoch_ckpt/', from_pt=True)
+                else:
+                    model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', from_pt=True)
+                
 
 
 if __name__ == '__main__':

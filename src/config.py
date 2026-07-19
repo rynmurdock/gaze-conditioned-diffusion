@@ -11,6 +11,7 @@ class Config:
     scanpath_as_edit_image: bool = True
     lora_rank: int = 16
     sample_teacher: bool = True
+    just_inf_timesteps: bool = False
 
     quantize_adam: bool = False
     quantize_model: bool = False
@@ -48,7 +49,7 @@ class Config:
 
     ### Logging
     save_path: str = './'
-    freq: int = 100 # how often we save/log/etc.
+    freq: int = 800 # how often we save/log/etc.
 
 def verify_config_validity(config):
     assert config.batch_size == 1, 'We do not support batch_size > 1 yet.'
