@@ -13,8 +13,6 @@ from PIL import Image, ImageDraw
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import functional as TF
 
-
-
 def scanpath_over_pil_image(scanpath: np.array, pil_img=None, w=None, h=None,
                              max_size=30, min_size=8, color=(255, 0, 0, 160),
                              line_color=None, line_width=2,

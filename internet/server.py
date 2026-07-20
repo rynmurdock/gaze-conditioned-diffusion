@@ -22,39 +22,25 @@ from diffusers import Flux2KleinPipeline, Flux2Transformer2DModel
 
 HOST = "localhost"
 PORT = 8765
-SEED = 9
+LATENT = torch.randn(1, 128, 24, 48).to('cuda')
+K = 5
 
 USE_CIRCLE = False
 
-LAST_12_POINTS = []
+LAST_K_POINTS = []
 
-if not USE_CIRCLE:
-    device = "cuda"
-    dtype = torch.bfloat16
-    # TODO connect our config file here
-    transformer = Flux2Transformer2DModel.from_pretrained('black-forest-labs/FLUX.2-klein-4B',
-                                                          subfolder='transformer')
-    # TODO we've changed how this works in train.py
-    add_lora(transformer, 16)
-    # the diffusers lora weight & adapter loading are fucked for safetensors 
-    # so we do it ourselves here 
-    from safetensors.torch import load_file
-    a = load_file('last_epoch_ckpt/diffusion_pytorch_model-00001-of-00002.safetensors')
-    b = load_file('last_epoch_ckpt/diffusion_pytorch_model-00002-of-00002.safetensors')
-    transformer.load_state_dict(a, strict=False)
-    transformer.load_state_dict(b, strict=False)
 
-    pipe = Flux2KleinPipeline.from_pretrained("black-forest-labs/FLUX.2-klein-4B", 
-                                              transformer=transformer,
-                                              torch_dtype=dtype)
-    pipe = pipe.to(device, dtype)
+def w(t):
+    return 4*t*(1-t)
 
-    pipe.transformer = torch.compile(pipe.transformer)
-    pipe.vae = torch.compile(pipe.vae)
+def slerp(t, low, high):
+    low_norm = low/torch.norm(low, dim=1, keepdim=True)
+    high_norm = high/torch.norm(high, dim=1, keepdim=True)
+    omega = torch.acos((low_norm*high_norm).sum(1))
+    so = torch.sin(omega)
+    res = (torch.sin((1.0-t)*omega)/so).unsqueeze(1)*low + (torch.sin(t*omega)/so).unsqueeze(1) * high
+    return res.squeeze(0)
 
-# Single worker thread: GPU calls run here so they never block the
-# asyncio event loop, and we never run two inference calls at once.
-executor = ThreadPoolExecutor(max_workers=1)
 
 def coords_to_pil_out(x, y, w, h):
     # 1. Create a blank image (width, height) and background color
@@ -68,21 +54,45 @@ def coords_to_pil_out(x, y, w, h):
     return buf.getvalue()
 
 
-def distance(p1, p2):
-    print(p1)
-    x1, y1 = p1
-    x2, y2 = p2
-    return math.hypot(x2 - x1, y2 - y1)
+def sub_point_wise_gaussians(tensor, coords, sigma=20.0, amplitude=.4):
+    H, W = tensor.shape[-2:]
+    yy, xx = torch.meshgrid(
+        torch.arange(H, device=tensor.device, dtype=torch.float32),
+        torch.arange(W, device=tensor.device, dtype=torch.float32),
+        indexing='ij'
+    )
+    cy, cx = coords[:, 0].view(-1, 1, 1), coords[:, 1].view(-1, 1, 1)
+    dist_sq = (yy - cy) ** 2 + (xx - cx) ** 2
+    gaussians = amplitude * torch.exp(-dist_sq / (2 * sigma ** 2))  # (N, H, W)
+    combined = gaussians.sum(0)  # (H, W)
+    return tensor - combined
+
+def get_new_latent(coords):
+    global LATENT
+    coords = coords.to(LATENT.device, LATENT.dtype)
+    # vae downsampling
+    coords //= 16
+    # xy to yx
+    coords = torch.flip(coords, (-1,))
+    flow_forward = .4
+    to_move = torch.full(LATENT.shape, flow_forward).to(LATENT.device, LATENT.dtype)
+    # we move very little there if our gaze is on an area
+    to_move = sub_point_wise_gaussians(to_move, coords)
+    to_move = to_move.clamp(0, 1)
+
+    rng_other_latent = torch.randn_like(LATENT)
+    LATENT = slerp(to_move, LATENT, rng_other_latent)
+    eps = torch.randn_like(LATENT)
+    LATENT = torch.sqrt(1 - w(to_move)) * LATENT + torch.sqrt(w(to_move)) * eps
+    return LATENT
+
 
 @torch.no_grad()
 def coords_to_klein_out(coords) -> bytes:
-    global SEED
-    coords = torch.tensor([coords]).to(torch.bfloat16)
-
-    if distance(coords[0][-1], coords[0][-2]) > 128:
-        SEED = SEED + torch.randint(-10, 10, (1,)).item()
-
-    print(coords.shape)
+    if not isinstance(coords, torch.Tensor):
+        coords = torch.tensor([coords]).to(torch.bfloat16)
+    
+    latent = get_new_latent(coords)
     try:
         cond_img = scanpath_over_pil_image(coords[0], 
                                            w=768, 
@@ -95,9 +105,10 @@ def coords_to_klein_out(coords) -> bytes:
             width=768,
             guidance_scale=1.0,
             num_inference_steps=4,
-            generator=torch.Generator(device=device).manual_seed(SEED)
+            latents=latent
         ).images[0]
-        image = scanpath_over_pil_image(coords[0], image)
+        image = scanpath_over_pil_image(torch.flip(coords[0], (0,),), image,
+                                        color=(255,0,0,100))
 
     except Exception as e:
         print(e)
@@ -106,21 +117,44 @@ def coords_to_klein_out(coords) -> bytes:
     image.save(buf, format="PNG")
     return buf.getvalue()
 
+if not USE_CIRCLE:
+    device = "cuda"
+    dtype = torch.bfloat16
+    # TODO connect our config file here
+
+    transformer = Flux2Transformer2DModel.from_pretrained('black-forest-labs/FLUX.2-klein-4B',
+                                                          subfolder='transformer')
+    transformer.load_lora_adapter('last_epoch_ckpt/pytorch_lora_weights.safetensors',
+                                  prefix=None,
+                                  use_safetensors=True)
+    pipe = Flux2KleinPipeline.from_pretrained("black-forest-labs/FLUX.2-klein-4B", 
+                                              transformer=transformer,
+                                              torch_dtype=dtype)
+    pipe = pipe.to(device, dtype)
+
+    coords_to_klein_out(torch.randint(0, 1024, (1, 4, 2)))
+
+    pipe.transformer = torch.compile(pipe.transformer)
+    pipe.vae = torch.compile(pipe.vae)
+
+# Single worker thread: GPU calls run here so they never block the
+# asyncio event loop, and we never run two inference calls at once.
+executor = ThreadPoolExecutor(max_workers=1)
 
 def process_gaze(x: float, y: float, width: float, height: float, t: float) -> bytes:
-    global LAST_12_POINTS
+    global LAST_K_POINTS
 
     x1, y1 = x * 764, y * 384
-    LAST_12_POINTS.append((x1, y1))
-    if len(LAST_12_POINTS) > 12:
-        LAST_12_POINTS.pop(0)
+    LAST_K_POINTS.append((x1, y1))
+    if len(LAST_K_POINTS) > K:
+        LAST_K_POINTS.pop(0)
 
     try:
         """Runs on the executor thread. Returns raw PNG bytes."""
         if USE_CIRCLE:
             return coords_to_pil_out(x, y, width, height)
         else:
-            return coords_to_klein_out(LAST_12_POINTS)
+            return coords_to_klein_out(LAST_K_POINTS)
     except Exception as e:
         raise(e)
 

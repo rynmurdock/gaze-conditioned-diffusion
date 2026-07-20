@@ -8,17 +8,19 @@ class Config:
     # model_path = './last_epoch_ckpt'
 
     remove_text_encoder: bool = False
+    # as opposed to using RoPE to specify points & their sequence
     scanpath_as_edit_image: bool = True
-    lora_rank: int = 32
+    lora_rank: int = 128
     sample_teacher: bool = True
-    just_inf_timesteps: bool = True
+    # seems better to do all t
+    just_inf_timesteps: bool = False
 
     quantize_adam: bool = False
     quantize_model: bool = False
 
     ### Hparams
     batch_size: int = 1
-    lr: float = 2e-4
+    lr: float = 3e-5
     use_prompt: str = ''
     # TODO test how we can make this give the same re structure but not identical results?
     teacher_use_prompt: str = 'Generate this image as it was given.'
@@ -49,7 +51,7 @@ class Config:
 
     ### Logging
     save_path: str = './'
-    freq: int = 100 # how often we save/log/etc.
+    freq: int = 1000 # how often we save/log/etc.
 
 def verify_config_validity(config):
     assert config.batch_size == 1, 'We do not support batch_size > 1 yet.'
