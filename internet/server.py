@@ -3,7 +3,6 @@ import io
 import torch
 import json
 import time
-import math
 import websockets
 
 from concurrent.futures import ThreadPoolExecutor
@@ -22,8 +21,9 @@ from diffusers import Flux2KleinPipeline, Flux2Transformer2DModel
 
 HOST = "localhost"
 PORT = 8765
-LATENT = torch.randn(1, 128, 24, 48).to('cuda')
-K = 5
+# TODO don't hardcode these
+LATENT = torch.randn(1, 24 * 48, 128).to('cuda')
+K = 18
 
 USE_CIRCLE = False
 
@@ -32,15 +32,6 @@ LAST_K_POINTS = []
 
 def w(t):
     return 4*t*(1-t)
-
-def slerp(t, low, high):
-    low_norm = low/torch.norm(low, dim=1, keepdim=True)
-    high_norm = high/torch.norm(high, dim=1, keepdim=True)
-    omega = torch.acos((low_norm*high_norm).sum(1))
-    so = torch.sin(omega)
-    res = (torch.sin((1.0-t)*omega)/so).unsqueeze(1)*low + (torch.sin(t*omega)/so).unsqueeze(1) * high
-    return res.squeeze(0)
-
 
 def coords_to_pil_out(x, y, w, h):
     # 1. Create a blank image (width, height) and background color
@@ -53,8 +44,30 @@ def coords_to_pil_out(x, y, w, h):
     image.save(buf, format="PNG")
     return buf.getvalue()
 
+import math
+def distance(p1, p2):
+    x1, y1 = p1
+    x2, y2 = p2
+    return math.hypot(x2 - x1, y2 - y1)
 
-def sub_point_wise_gaussians(tensor, coords, sigma=20.0, amplitude=.4):
+
+import matplotlib.pyplot as plt
+import numpy as np
+def plot_heatmap(arr, cmap='viridis', title=None, cbar_label=None, figsize=(6, 5)):
+    """
+    Plot a heatmap from a 2D numpy array (height x width).
+    """
+    arr = np.array(arr.sum(0).cpu())
+    assert arr.ndim == 2, f"Expected 2D array, got shape {arr.shape}"
+
+    fig, ax = plt.subplots(figsize=figsize)
+    im = ax.imshow(arr, cmap=cmap, aspect='auto')
+    fig.colorbar(im, ax=ax, label=cbar_label)
+
+    plt.tight_layout()
+    plt.savefig('this_fig.png')
+
+def sub_point_wise_gaussians(tensor, coords, sigma=2.0, amplitude=2):
     H, W = tensor.shape[-2:]
     yy, xx = torch.meshgrid(
         torch.arange(H, device=tensor.device, dtype=torch.float32),
@@ -65,39 +78,64 @@ def sub_point_wise_gaussians(tensor, coords, sigma=20.0, amplitude=.4):
     dist_sq = (yy - cy) ** 2 + (xx - cx) ** 2
     gaussians = amplitude * torch.exp(-dist_sq / (2 * sigma ** 2))  # (N, H, W)
     combined = gaussians.sum(0)  # (H, W)
-    return tensor - combined
+    plot_heatmap(gaussians)
+    return tensor + combined
 
-def get_new_latent(coords):
+
+def prepare_latents_mask(coords):
     global LATENT
+    global LAST_K_POINTS
+    
+    # we wipe out our previous points after a long saccade followed by sustained gaze
+    if len(coords[0]) > 4:
+        last_three_distances = [distance(coords[0][j], coords[0][j+1]) for j in range(len(coords[0])-1)[-3:]]
+
+        if last_three_distances[0] > 100 and last_three_distances[1] < 50 and last_three_distances[2] < 50:
+            LAST_K_POINTS = LAST_K_POINTS[-2:]
+        print(f'{last_three_distances=}')
+
     coords = coords.to(LATENT.device, LATENT.dtype)
     # vae downsampling
     coords //= 16
     # xy to yx
-    coords = torch.flip(coords, (-1,))
-    flow_forward = .4
-    to_move = torch.full(LATENT.shape, flow_forward).to(LATENT.device, LATENT.dtype)
-    # we move very little there if our gaze is on an area
-    to_move = sub_point_wise_gaussians(to_move, coords)
-    to_move = to_move.clamp(0, 1)
-
-    rng_other_latent = torch.randn_like(LATENT)
-    LATENT = slerp(to_move, LATENT, rng_other_latent)
-    eps = torch.randn_like(LATENT)
-    LATENT = torch.sqrt(1 - w(to_move)) * LATENT + torch.sqrt(w(to_move)) * eps
-    return LATENT
+    coords = torch.flip(coords, (-1,))[0]
+    gaze_mask = sub_point_wise_gaussians(LATENT.new_zeros(384//16, 768//16), coords)
+    return gaze_mask
 
 
 @torch.no_grad()
 def coords_to_klein_out(coords) -> bytes:
-    if not isinstance(coords, torch.Tensor):
-        coords = torch.tensor([coords]).to(torch.bfloat16)
-    
-    latent = get_new_latent(coords)
+    global LATENT
     try:
+        if not isinstance(coords, torch.Tensor):
+            coords = torch.tensor([coords]).to(torch.bfloat16)
+        gaze_mask = prepare_latents_mask(coords)
+
         cond_img = scanpath_over_pil_image(coords[0], 
                                            w=768, 
                                            h=384, 
                                            just_path=True)
+        
+        
+        def diffedit_callback_fn(pipe, step, timestep, kwargs):
+            print(f'{kwargs['latents'].shape=}')
+
+            # we're getting the "current" latent's timestep
+            if step < 2:
+                latents = kwargs['latents']
+                sigma = pipe.scheduler.timesteps[step+1] / 1000
+                eps = torch.randn_like(LATENT)
+                # our LATENT is x0
+                latent_renoised = LATENT * (1-sigma) + eps * (sigma)
+                # pack mask
+                print(f'{gaze_mask.sum()=}')
+                mask = gaze_mask.reshape(1, gaze_mask.shape[-2] * gaze_mask.shape[-1], 1).expand(-1, -1, latents.shape[-1])
+                mask = mask > (4-step)
+                put_back = latent_renoised[mask]
+                latents[mask] = put_back.to(latents.dtype)
+                kwargs['latents'] = latents
+            return kwargs
+
         image = pipe(
             image=cond_img,
             prompt='',
@@ -105,8 +143,13 @@ def coords_to_klein_out(coords) -> bytes:
             width=768,
             guidance_scale=1.0,
             num_inference_steps=4,
-            latents=latent
+            callback_on_step_end=diffedit_callback_fn,
+            output_type='latent',
         ).images[0]
+        LATENT = pipe._pack_latents(pipe._patchify_latents(image[None]))
+        print(f'{LATENT.shape=}')
+        image = pipe.vae.decode(image[None], return_dict=False)[0]
+        image = pipe.image_processor.postprocess(image, output_type='pil')[0]
         image = scanpath_over_pil_image(torch.flip(coords[0], (0,),), image,
                                         color=(255,0,0,100))
 
@@ -132,7 +175,9 @@ if not USE_CIRCLE:
                                               torch_dtype=dtype)
     pipe = pipe.to(device, dtype)
 
-    coords_to_klein_out(torch.randint(0, 1024, (1, 4, 2)))
+    Image.open(io.BytesIO(coords_to_klein_out([[5, 7], [8, 10], [9, 9]]))).save('this.png')
+    Image.open(io.BytesIO(coords_to_klein_out([[5, 7], [32, 123], [32, 111]]))).save('this.png')
+    Image.open(io.BytesIO(coords_to_klein_out([[5, 7], [32, 123], [32, 111]]))).save('this.png')
 
     pipe.transformer = torch.compile(pipe.transformer)
     pipe.vae = torch.compile(pipe.vae)
