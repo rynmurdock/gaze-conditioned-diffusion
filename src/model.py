@@ -286,6 +286,7 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
         pipe.transformer.enable_gradient_checkpointing()
 
     if not config.use_cached_distilled_latents:
+        print(dtype)
         pipe.vae = pipe.vae.to(device, dtype)
         if do_compile:
             pipe.vae = torch.compile(pipe.vae)

@@ -21,12 +21,15 @@ import matplotlib.pyplot as plt
 from data import get_dataloader
 from config import main_config, verify_config_validity
 from model import get_model_and_tokenizer, get_optimizer_and_lr_sched, get_loss
-
+from utils.exp_logging import setup_log_dir
 
 logging.basicConfig(level=logging.INFO)
 
 def main(config):
     verify_config_validity(config)
+    log_dir = setup_log_dir(config)
+    logging.info(f'Setting up our logging directory at {log_dir}!')
+
 
     np.random.seed(config.seed)
     torch.manual_seed(config.seed)
@@ -84,10 +87,12 @@ def main(config):
                         train_losses.append(sum(inner_train_losses)/len(inner_train_losses))
                     inner_train_losses = []
 
-                plt.plot(train_losses)
-                plt.plot(validation_losses)
-                plt.savefig('latest_loss_curves.png')
+                plt.plot(train_losses, label='Train')
+                plt.plot(validation_losses, label='Validation')
+                plt.legend()
+                plt.savefig(log_dir + f'/{total_inds}_loss_curve.jpg')
                 plt.clf()
+                
                 if total_inds == 2 * config.freq:
                     # to save our scaling, we remove the first 2 metric points after they're done
                     train_losses = []
@@ -115,8 +120,6 @@ def main(config):
                     model.pipe.transformer.save_lora_adapter(f'{config.save_path}/last_epoch_ckpt/', )
                 else:
                     model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', from_pt=True)
-                
-
 
 if __name__ == '__main__':
     main(main_config)
