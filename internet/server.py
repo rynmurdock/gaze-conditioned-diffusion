@@ -67,7 +67,7 @@ def plot_heatmap(arr, cmap='viridis', title=None, cbar_label=None, figsize=(6, 5
     plt.tight_layout()
     plt.savefig('this_fig.png')
 
-def sub_point_wise_gaussians(tensor, coords, sigma=2.0, amplitude=2):
+def sub_point_wise_gaussians(tensor, coords, sigma=4.0, amplitude=2):
     H, W = tensor.shape[-2:]
     yy, xx = torch.meshgrid(
         torch.arange(H, device=tensor.device, dtype=torch.float32),
@@ -89,8 +89,7 @@ def prepare_latents_mask(coords):
     # we wipe out our previous points after a long saccade followed by sustained gaze
     if len(coords[0]) > 4:
         last_three_distances = [distance(coords[0][j], coords[0][j+1]) for j in range(len(coords[0])-1)[-3:]]
-
-        if last_three_distances[0] > 100 and last_three_distances[1] < 50 and last_three_distances[2] < 50:
+        if last_three_distances[0] > 100 and last_three_distances[1] < 100 and last_three_distances[2] < 100:
             LAST_K_POINTS = LAST_K_POINTS[-2:]
         print(f'{last_three_distances=}')
 

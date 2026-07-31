@@ -1,15 +1,15 @@
 
 
-[] use for guiding
-  [] train scanpath-conditioned model so the image will generate with relevant portions
+[x] use for guiding
+  [x] train scanpath-conditioned model so the image will generate with relevant portions
       at your latest fixations.
-        [] morph generations and/or only update on long saccades
+        [x] morph generations and/or only update on long saccades
   [] train point-conditioned video model (longcat? ltx?) so that gaze naturally moves media
-[] use for evading gaze
-  [] could cache generated images/video by coordinate
-  [] detect saccades?
+  [x] could cache generated images/video by coordinate
+  [x] detect saccades?
+[x] use for evading gaze
 [] use for optimizing contents
-  [] using those simple shape morphers
+  [x] using those simple shape morphers
   [] using zoom-in and propogate
   [] using preference-prior-esque genrec system
 
@@ -42,15 +42,26 @@
   [x] regenerate teacher i/o pairs
 [x] K timesteps instead of full T
 [x] condition on points as edit image instead of RoPE
-[] could look cool to predict the large/small shrinking & appearing points as well
+[x] could look cool to predict the large/small shrinking & appearing fixation points as well
+  - already does this a bit implicitly!
 
 [] light cfg on with/without gaze rope?
 
 [] Wandb-esque html
-  [] I don't need even tensoboard just the last val, train plots & images
+  [] I don't need even tensorboard just the last val, train plots & images
+[] copy config to saved ckpt
 
-[] smoothing over scanpath
+[x] smoothing over scanpath
 [] scanpath statistics (e.g. average length)
-[] compare the case where the art piece hides from you versus the one that follows
-[] remove grey padding on data
+[x] compare the case where the art piece hides from you versus the one that follows
+  [] hides from you (with our changing latent at least) is super frustrating, as one might expect
+[x] remove grey padding on data
+  [] may still be some on vertical; worth bundling with scanpath stats, looking more at data
+
+[] further Klein speedup with vllm/llamaccp/etc.?
+
+[] the scanpath masked for diffedit should keep latents *as you've looked at them*
+    not in the future.
+
+
 
