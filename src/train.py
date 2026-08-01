@@ -62,7 +62,7 @@ def main(config):
                     model.pipe.transformer.save_lora_adapter(f'{config.save_path}/last_epoch_ckpt/', )
                 else:
                     model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', from_pt=True)
-                sys.exit()
+                return
             if batch is None or \
                             (config.use_cached_distilled_latents and batch.get('latents', None) is None):
                 logging.warning(f'Skipping batch! {batch}')

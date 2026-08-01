@@ -1,6 +1,7 @@
 
 import os
 import sys
+import logging
 import itertools
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
@@ -18,7 +19,10 @@ def grid_configs(grid: dict):
         yield Config(**dict(zip(keys, combo)))
 
 for cfg in grid_configs(sweep_grid):
-    print([f"Running: {n}={getattr(cfg, n)}" for n in sweep_grid.keys()])
+    logging.info([f"Running: {n}={getattr(cfg, n)}" for n in sweep_grid.keys()])
     cfg.exp_name = "_".join([f"{n}={getattr(cfg, n)}" for n in sweep_grid.keys()])
-    main(cfg)
+    try:
+        main(cfg)
+    except:
+        logging.warning(f'{cfg.exp_name} failed.')
 
