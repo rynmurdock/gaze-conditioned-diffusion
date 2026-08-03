@@ -6,11 +6,12 @@ import os
 import json
 import torch
 
+
 @dataclass
 class Config:
     ### Model
-    model_path = None
-    # model_path = './last_epoch_ckpt'
+    # model_path = None
+    model_path = './last_epoch_ckpt'
 
     #### seems consistently better to keep text encoder; use edit image
     remove_text_encoder: bool = False
@@ -31,14 +32,14 @@ class Config:
 
     ### Hparams
     batch_size: int = 1
-    lr: float = 3e-5
-    use_prompt: str = 'The scene is what is seen.'
+    lr: float = 1e-5
+    use_prompt: str = 'The scene that was seen.'
     # TODO test how we can make this give the same re structure but not identical results?
     teacher_use_prompt: str = 'Generate this image as it was given.'
 
     ### Training
     epochs: int = 3000000000000
-    max_steps: int = 10_000
+    max_steps: int = 100_000
     max_val_steps: int = 64
 
     # this seems to break after d5b46746eb7f329c793d65b76a09c96ef9bfdd97
@@ -50,7 +51,7 @@ class Config:
     # we parse torch dtypes to str on saving & then back on loading for simplicity
     dtype: torch.dtype = field(default=torch.bfloat16, repr=False)
     activation_checkpointing: bool = True
-    seed: int = 101
+    seed: int = 11
 
     ### Data
     data_path: str = 'trainSet'

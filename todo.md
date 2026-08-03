@@ -9,7 +9,8 @@
   [x] detect saccades?
 [x] use for evading gaze
 [] use for optimizing contents
-  [x] using those simple shape morphers
+  - would cite Reben
+  [] using simple shape morphers
   [] using zoom-in and propogate
   [] using preference-prior-esque genrec system
 
@@ -44,24 +45,26 @@
 [x] condition on points as edit image instead of RoPE
 [x] could look cool to predict the large/small shrinking & appearing fixation points as well
   - already does this a bit implicitly!
-
 [] light cfg on with/without gaze rope?
 
-[] Wandb-esque html
-  [] I don't need even tensorboard just the last val, train plots & images
-[] copy config to saved ckpt
+[x] Wandb-esque html
+  [x] I don't need even tensorboard just the last val, train plots & images
+[x] copy config to saved ckpt
 
 [x] smoothing over scanpath
 [] scanpath statistics (e.g. average length)
 [x] compare the case where the art piece hides from you versus the one that follows
-  [] hides from you (with our changing latent at least) is super frustrating, as one might expect
+  [x] hides from you (with our changing latent at least) is super frustrating, as one might expect
 [x] remove grey padding on data
   [] may still be some on vertical; worth bundling with scanpath stats, looking more at data
-
 [] further Klein speedup with vllm/llamaccp/etc.?
+[] the scanpath masked for diffedit should keep latents *that you've looked at*
+    not at the location in the future.
 
-[] the scanpath masked for diffedit should keep latents *as you've looked at them*
-    not in the future.
+
+[] update image after sevral ticks, not every frame
+  [] update such that all fixation points are either consistent or as far as possible
+    [] can you differentiate?
 
 
 

@@ -200,7 +200,7 @@ class Zoo(torch.nn.Module):
                 generator=latent_seed_generator,
             ).images[0]
             image = scanpath_over_pil_image(scanpath[0], image)
-            image.save(f'latest_val_{ind}.png')
+            image.save(f'{self.config.log_dir}/latest_val_{ind}.png')
 
         if offload_vae_back_to_cpu:
             self.pipe.vae = self.pipe.vae.to('cpu')

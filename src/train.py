@@ -28,6 +28,7 @@ logging.basicConfig(level=logging.INFO)
 def main(config):
     verify_config_validity(config)
     log_dir = setup_log_dir(config)
+    config.log_dir = log_dir
     logging.info(f'Setting up our logging directory at {log_dir}!')
 
 
@@ -59,9 +60,9 @@ def main(config):
             if total_inds > config.max_steps:
                 logging.info('Saving our transformer & ending training')
                 if config.lora_rank:
-                    model.pipe.transformer.save_lora_adapter(f'{config.save_path}/last_epoch_ckpt/', )
+                    model.pipe.transformer.save_lora_adapter(f'{config.log_dir}/last_epoch_ckpt/', )
                 else:
-                    model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', from_pt=True)
+                    model.pipe.transformer.save_pretrained(f'{config.log_dir}/last_epoch_ckpt', from_pt=True)
                 return
             if batch is None or \
                             (config.use_cached_distilled_latents and batch.get('latents', None) is None):
@@ -117,9 +118,9 @@ def main(config):
                 logging.info('Saving our transformer')
                 if config.lora_rank:
                     # from_pt=True can't be used here
-                    model.pipe.transformer.save_lora_adapter(f'{config.save_path}/last_epoch_ckpt/', )
+                    model.pipe.transformer.save_lora_adapter(f'{config.log_dir}/{total_inds}_ckpt/', )
                 else:
-                    model.pipe.transformer.save_pretrained(f'{config.save_path}/last_epoch_ckpt', from_pt=True)
+                    model.pipe.transformer.save_pretrained(f'{config.log_dir}/{total_inds}_ckpt/', from_pt=True)
 
 if __name__ == '__main__':
     main(main_config)

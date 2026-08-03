@@ -9,8 +9,8 @@ from config import Config
 from train import main
 
 sweep_grid = {
-    "lr":                  [1e-4, 2e-4, 1e-5],
-    "lora_rank":           [2, 8, 32, 128],
+    "lr":                  [1e-5,],
+    "lora_rank":           [512, 256, 1024],
 }
 
 def grid_configs(grid: dict):
