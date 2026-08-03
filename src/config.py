@@ -11,7 +11,8 @@ import torch
 class Config:
     ### Model
     # model_path = None
-    model_path = './last_epoch_ckpt'
+    transformer_model_path = None
+    lora_path = './logs/Ede_Joelly/10_ckpt/'
 
     #### seems consistently better to keep text encoder; use edit image
     remove_text_encoder: bool = False
@@ -66,6 +67,8 @@ class Config:
     exp_name: str = None
     save_path: str = './'
     freq: int = 1000 # how often we save/log/etc.
+
+
 
     def to_json(self, filename):
         # we don't want to mutate our actual class

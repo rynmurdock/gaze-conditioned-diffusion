@@ -271,7 +271,11 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
                                                            subfolder=None if path else 'transformer',
                                                            quantization_config=BitsAndBytesConfig(load_in_8bit=True,) if config.quantize_model else None,
                                                            strict=False)
-    if config.lora_rank:
+    if config.lora_path:
+        transformer.load_lora_adapter(f'{config.lora_path}/pytorch_lora_weights.bin',
+                                      prefix=None,
+                                      adapter_name='default')
+    elif config.lora_rank:
         # inplace operation
         add_lora(transformer, config.lora_rank)
     pipe = Flux2KleinPipeline.from_pretrained("black-forest-labs/FLUX.2-klein-4B", 

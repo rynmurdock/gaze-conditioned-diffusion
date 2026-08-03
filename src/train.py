@@ -7,7 +7,6 @@ PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python src/train.py
 ###########################################
 
 
-import sys
 import torch
 torch.set_float32_matmul_precision('high')
 import logging
@@ -29,13 +28,25 @@ def main(config):
     verify_config_validity(config)
     log_dir = setup_log_dir(config)
     config.log_dir = log_dir
-    logging.info(f'Setting up our logging directory at {log_dir}!')
+    logging.info(f'''
+
+****************************
+****************************
+'Setting up our logging directory at {log_dir} !
+****************************
+****************************
+
+                 ''')
+    logging.basicConfig(level=logging.INFO, 
+                        format=f"[{log_dir}] %(message)s",
+                        force=True)
+
 
 
     np.random.seed(config.seed)
     torch.manual_seed(config.seed)
 
-    model = get_model_and_tokenizer(config.model_path, config.device, 
+    model = get_model_and_tokenizer(config.transformer_model_path, config.device, 
                                     config.dtype, config.seed, config.do_compile, config)
 
     if config.lora_rank:
@@ -60,7 +71,8 @@ def main(config):
             if total_inds > config.max_steps:
                 logging.info('Saving our transformer & ending training')
                 if config.lora_rank:
-                    model.pipe.transformer.save_lora_adapter(f'{config.log_dir}/last_epoch_ckpt/', )
+                    model.pipe.transformer.save_lora_adapter(f'{config.log_dir}/last_epoch_ckpt/', safe_serialization=False,
+                                                             adapter_name='default',)
                 else:
                     model.pipe.transformer.save_pretrained(f'{config.log_dir}/last_epoch_ckpt', from_pt=True)
                 return
@@ -118,7 +130,8 @@ def main(config):
                 logging.info('Saving our transformer')
                 if config.lora_rank:
                     # from_pt=True can't be used here
-                    model.pipe.transformer.save_lora_adapter(f'{config.log_dir}/{total_inds}_ckpt/', )
+                    model.pipe.transformer.save_lora_adapter(f'{config.log_dir}/{total_inds}_ckpt/', 
+                                                             safe_serialization=False, adapter_name='default')
                 else:
                     model.pipe.transformer.save_pretrained(f'{config.log_dir}/{total_inds}_ckpt/', from_pt=True)
 

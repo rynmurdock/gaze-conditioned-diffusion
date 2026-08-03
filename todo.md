@@ -58,6 +58,7 @@
 [x] remove grey padding on data
   [] may still be some on vertical; worth bundling with scanpath stats, looking more at data
 [] further Klein speedup with vllm/llamaccp/etc.?
+[x] fix LoRA saving+loading
 [] the scanpath masked for diffedit should keep latents *that you've looked at*
     not at the location in the future.
 
