@@ -199,6 +199,7 @@ class Zoo(torch.nn.Module):
                 width=width,
                 generator=latent_seed_generator,
             ).images[0]
+            image.save(f'{self.config.log_dir}/sans_scanpath-latest_val_{ind}.png')
             image = scanpath_over_pil_image(scanpath[0], image)
             image.save(f'{self.config.log_dir}/latest_val_{ind}.png')
 
@@ -244,7 +245,7 @@ def get_prompt_embeds_txt_ids(pipe, prompt, device, dtype=torch.float32):
 def add_lora(transformer, rank):
     transformer_lora_config = LoraConfig(
         r=rank,
-        lora_alpha=rank * 2, 
+        lora_alpha=rank, 
         init_lora_weights="gaussian",
         target_modules='all-linear'
         # could train just the attention for image
@@ -272,10 +273,21 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
                                                            quantization_config=BitsAndBytesConfig(load_in_8bit=True,) if config.quantize_model else None,
                                                            strict=False)
     if config.lora_path:
-        transformer.load_lora_adapter(f'{config.lora_path}/pytorch_lora_weights.bin',
+        target_modules = [
+            "to_q", "to_k", "to_v", "to_out.0",          # double-stream attention
+            "add_q_proj", "add_k_proj", "add_v_proj", "to_add_out",  # double-stream cross/context attention
+            "to_qkv_mlp_proj",                            # single-stream fused qkv+mlp-in
+            "to_out",                                     # single-stream fused attn-out+mlp-out
+        ]
+        transformer.load_lora_adapter(f'{config.lora_path}',
                                       prefix=None,
-                                      adapter_name='default')
+                                      adapter_name='default',
+                                      target_modules=target_modules
+                                      )
+        transformer.set_adapters('default', 1)
+        
     elif config.lora_rank:
+        # we need a new lora as we aren't loading one
         # inplace operation
         add_lora(transformer, config.lora_rank)
     pipe = Flux2KleinPipeline.from_pretrained("black-forest-labs/FLUX.2-klein-4B", 
@@ -332,5 +344,5 @@ def get_optimizer_and_lr_sched(params, lr, config):
         optimizer = bnb.optim.Adam8bit(params, lr=lr)
     else:
         optimizer = torch.optim.AdamW(params, lr=lr)
-    scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, total_iters=5)
+    scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, total_iters=1)
     return optimizer, scheduler

@@ -17,10 +17,13 @@ def rng_proper_codename():
         logging.info(f'Saving word list starting with: {long_txt[:100]=}')
 
     words = open(CACHE_FILE).read().splitlines()
+    normal_words = [word for word in words if word[0].islower()]
     upper_words = [word for word in words if word[0].isupper()]
-    name_words  = [word for word in upper_words if not word.isupper()]
-    rand_name   = ' '.join([name_words[torch.randint(0, len(name_words), (1,))] for i in range(2)])
-    return rand_name
+    name_words = [word for word in upper_words if not word.isupper()]
+    rand_name = ' '.join([name_words[torch.randint(0, len(name_words), (1,))] for i in range(2)])
+    rand_non_name = normal_words[torch.randint(0, len(normal_words), (1,))]
+    codename = f'{rand_non_name} {rand_name}'
+    return codename
 
 def setup_log_dir(config):
     # random code name or possibly a name set by config set by hparam sweep script

@@ -12,14 +12,13 @@ class Config:
     ### Model
     # model_path = None
     transformer_model_path = None
-    lora_path = './logs/Ede_Joelly/10_ckpt/'
+    lora_path = '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/exodromic_Gemaric_Ceratitoidea/28000_ckpt/pytorch_lora_weights.safetensors'
 
     #### seems consistently better to keep text encoder; use edit image
     remove_text_encoder: bool = False
     # as opposed to using RoPE to specify points & their sequence
     scanpath_as_edit_image: bool = True
     ####
-
 
     lora_rank: int = 128
     sample_teacher: bool = True
@@ -33,8 +32,8 @@ class Config:
 
     ### Hparams
     batch_size: int = 1
-    lr: float = 1e-5
-    use_prompt: str = 'The scene that was seen.'
+    lr: float = 1e-4
+    use_prompt: str = 'The scene.'
     # TODO test how we can make this give the same re structure but not identical results?
     teacher_use_prompt: str = 'Generate this image as it was given.'
 
@@ -52,7 +51,7 @@ class Config:
     # we parse torch dtypes to str on saving & then back on loading for simplicity
     dtype: torch.dtype = field(default=torch.bfloat16, repr=False)
     activation_checkpointing: bool = True
-    seed: int = 11
+    seed: int = 9
 
     ### Data
     data_path: str = 'trainSet'

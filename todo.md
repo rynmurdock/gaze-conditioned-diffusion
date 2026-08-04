@@ -60,10 +60,10 @@
 [] further Klein speedup with vllm/llamaccp/etc.?
 [x] fix LoRA saving+loading
 [] the scanpath masked for diffedit should keep latents *that you've looked at*
-    not at the location in the future.
+    not the ones at the location in the next tick.
 
 
-[] update image after sevral ticks, not every frame
+[] update image after several ticks, not every frame
   [] update such that all fixation points are either consistent or as far as possible
     [] can you differentiate?
 
