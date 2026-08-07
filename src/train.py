@@ -26,6 +26,13 @@ logging.basicConfig(level=logging.INFO)
 
 def main(config):
     verify_config_validity(config)
+    if config.lora_path or config.lora_rank:
+        # iterate data's seed when we're loading a checkpoint;
+        #   ideally would start at the stopping point, but just new random is better than nothing
+        logging.warning('''Advancing training config's seed by 1! for loading a ckpt for training''')
+        config.seed = config.seed + 1
+        torch.manual_seed(config.seed)
+
     log_dir = setup_log_dir(config)
     config.log_dir = log_dir
     logging.info(f'''
@@ -34,7 +41,7 @@ Setting up our logging directory at {log_dir} !
 ****************************
                  ''')
     logging.basicConfig(level=logging.INFO, 
-                        format=f"[{log_dir}] %(message)s",
+                        format=f"[ {log_dir} ] %(message)s",
                         force=True)
 
 
@@ -56,7 +63,7 @@ Training {len(trained_params)} torch modules
     optimizer, lr_sched = get_optimizer_and_lr_sched(trained_params, config.lr, config)
     for p in not_trained:
         p.requires_grad = False
-    
+
     dataloader, val_dataloader = get_dataloader(config.data_path, config.val_data_split_ratio,
                                                  config.batch_size, config.num_workers, config.seed,
                                                  config.resolution, config.use_cached_distilled_latents)

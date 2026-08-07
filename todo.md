@@ -62,10 +62,20 @@
 [] the scanpath masked for diffedit should keep latents *that you've looked at*
     not the ones at the location in the next tick.
 
+[] variations on famous painitngs by scanpath
+  [] look through your existing data
+  [] collect your own scanpaths
 
 [] update image after several ticks, not every frame
   [] update such that all fixation points are either consistent or as far as possible
     [] can you differentiate?
 
+hparam sweep:
+  - under-trained models?
+  [x] lora rank
+  [x] lr
+  [] logit normal params
 
 
+
+[] compare teacher model sampling typical trajectory & with gt answer given

@@ -12,7 +12,8 @@ class Config:
     ### Model
     # model_path = None
     transformer_model_path = None
-    lora_path = '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/exodromic_Gemaric_Ceratitoidea/28000_ckpt/pytorch_lora_weights.safetensors'
+    lora_path = '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/pigmeat_Maldivian_Pennacook/15000_ckpt/pytorch_lora_weights.safetensors'
+    seed: int = 13
 
     #### seems consistently better to keep text encoder; use edit image
     remove_text_encoder: bool = False
@@ -32,10 +33,10 @@ class Config:
 
     ### Hparams
     batch_size: int = 1
-    lr: float = 1e-4
+    lr: float = 4e-5
     use_prompt: str = 'The scene.'
     # TODO test how we can make this give the same re structure but not identical results?
-    teacher_use_prompt: str = 'Generate this image as it was given.'
+    teacher_use_prompt: str = ''
 
     ### Training
     epochs: int = 3000000000000
@@ -51,7 +52,6 @@ class Config:
     # we parse torch dtypes to str on saving & then back on loading for simplicity
     dtype: torch.dtype = field(default=torch.bfloat16, repr=False)
     activation_checkpointing: bool = True
-    seed: int = 9
 
     ### Data
     data_path: str = 'trainSet'

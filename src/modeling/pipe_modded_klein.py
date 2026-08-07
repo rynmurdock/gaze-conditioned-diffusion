@@ -38,7 +38,7 @@ from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 from diffusers.pipelines.flux2.image_processor import Flux2ImageProcessor
 from diffusers.pipelines.flux2.pipeline_output import Flux2PipelineOutput
 
-from modded_klein import prepare_image_ids
+from modeling.modded_klein import prepare_image_ids
 
 if is_torch_xla_available():
     import torch_xla.core.xla_model as xm

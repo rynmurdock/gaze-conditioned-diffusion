@@ -1,11 +1,12 @@
-
+import math
 import torch
 import logging
 from tqdm import tqdm
 from copy import deepcopy
 
-from pipe_modded_klein import Flux2KleinPipeline
-from modded_klein import Flux2Transformer2DModel, prepare_image_ids, prepare_latents, get_inf_timesteps
+from modeling.pipe_modded_klein import Flux2KleinPipeline
+from modeling.image_cfg_pipe_modded_klein import ImageCFGFlux2KleinPipeline, compute_empirical_mu
+from modeling.modded_klein import Flux2Transformer2DModel, prepare_image_ids, prepare_latents, get_inf_timesteps
 from data import scanpath_over_pil_image
 
 from diffusers import BitsAndBytesConfig
@@ -66,25 +67,28 @@ def get_loss(model, image, scanpaths, config,
                     device=x0.device,
                     dtype=x0.dtype,
                 )
+            hint_drop_mask = torch.rand((x0.shape[0],)) < .2
+            hint_latents[hint_drop_mask] = 0
+
         x0 = model.pipe._pack_latents(x0)
         noise = torch.randn_like(x0)
 
         if latents is None:
-            # TODO don't use uniform sampling (can try logit normal &/or just teacher's in schedule)
             if config.just_inf_timesteps:
-                timesteps = get_inf_timesteps(model.pipe.scheduler, x0, num_inference_steps=4, device='cuda')
+                timesteps = get_inf_timesteps(model.pipe.scheduler, x0, num_inference_steps=4, device='cuda',)
                 k = torch.randint(0, 4, (noise.shape[0],)).to(x0.device)
                 timesteps = timesteps[k]
             else:
                 u = compute_density_for_timestep_sampling(
                     weighting_scheme='logit_normal',
                     batch_size=x0.shape[0],
-                    logit_mean=0,
+                    logit_mean=-.5,
                     logit_std=1,
                 )
+                mu = compute_empirical_mu(noise.shape[1], 4)
+                u = math.exp(mu) / (math.exp(mu) + (1 / u - 1) ** 1)
                 indices = (u * model.noise_scheduler_copy.config.num_train_timesteps).long()
                 timesteps = model.noise_scheduler_copy.timesteps[indices].to(device=x0.device)
-
             sigma = timesteps / 1000
             latents = sigma * noise + (1 - sigma) * x0
 
@@ -106,11 +110,13 @@ def get_loss(model, image, scanpaths, config,
         if scanpath_as_edit_image:
             latent_model_input = torch.cat([latents, hint_latents], dim=1).to(model.pipe.transformer.dtype)
             latent_image_ids = torch.cat([typical_image_ids, hint_ids], dim=1)
+
         output = model(latents if not scanpath_as_edit_image else latent_model_input, 
                        timesteps=timesteps, image_ids=gaze_image_ids if not scanpath_as_edit_image else latent_image_ids,
                        prompt_embeds=model.pipe.cached_prompt,
                        txt_ids=model.pipe.cached_txt_ids,
                        )
+
         if scanpath_as_edit_image:
             output = output[:, : latents.size(1) :]
 
@@ -168,7 +174,7 @@ class Zoo(torch.nn.Module):
         return velocity
 
     @torch.no_grad()
-    def do_qual_val(self,):
+    def do_qual_val(self, guidance_scale=4, im_n=0):
         offload_vae_back_to_cpu = False
         # infer vae device from the all params
         if any([p.device != torch.device('cuda:0') for p in self.pipe.vae.parameters()]):
@@ -188,25 +194,26 @@ class Zoo(torch.nn.Module):
             scanpath_generator = torch.Generator(device="cuda").manual_seed(this_seed)
             cond_img, scanpath = get_random_scanpath_cond_im(width, height, 
                                                              generator=scanpath_generator)
+            self.pipe.config.is_distilled = False
             image = self.pipe(
                 # just smuggling for our image ids
                 image=cond_img if self.config.scanpath_as_edit_image else None,
                 latents=scanpath if not self.config.scanpath_as_edit_image else None,
                 num_inference_steps=4,
-                guidance_scale=1,
+                guidance_scale=guidance_scale,
                 prompt_embeds=prompt_embeds,
+                negative_prompt_embeds=prompt_embeds,
                 height=height,
                 width=width,
                 generator=latent_seed_generator,
             ).images[0]
-            image.save(f'{self.config.log_dir}/sans_scanpath-latest_val_{ind}.png')
+            image.save(f'{self.config.log_dir}/sans_scanpath-latest_val_{ind}_{im_n}.png')
             image = scanpath_over_pil_image(scanpath[0], image)
-            image.save(f'{self.config.log_dir}/latest_val_{ind}.png')
+            image.save(f'{self.config.log_dir}/latest_val_{ind}_{im_n}.png')
 
         if offload_vae_back_to_cpu:
             self.pipe.vae = self.pipe.vae.to('cpu')
 
-        return image
     
     @torch.no_grad()
     def do_quant_val(self, val_dataloader, max_val_steps, dtype):
@@ -290,7 +297,8 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
         # we need a new lora as we aren't loading one
         # inplace operation
         add_lora(transformer, config.lora_rank)
-    pipe = Flux2KleinPipeline.from_pretrained("black-forest-labs/FLUX.2-klein-4B", 
+
+    pipe = ImageCFGFlux2KleinPipeline.from_pretrained("black-forest-labs/FLUX.2-klein-4B", 
                                               transformer=transformer,
                                               # full precision weights
                                               torch_dtype=torch.float32,
