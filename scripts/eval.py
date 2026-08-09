@@ -87,7 +87,7 @@ __train_dataloader, val_dataloader = get_dataloader(config.data_path, config.val
 total_scores = 0
 scores = {}
 for data_ind, sample in enumerate(val_dataloader):
-    if data_ind > 128:
+    if data_ind >= 128:
         break
     total_scores += 1
 

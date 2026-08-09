@@ -80,12 +80,18 @@ hparam sweep:
   - under-trained models?
   [x] lora rank
   [x] lr
+
 [x] compare teacher model sampling typical trajectory & with gt answer given
 [x] timestep shift by resolution
 
 [] starting writeup
-[] eval over checkpoints using lpips/clip/dinoscore
-  [] just to prove d-opsd is necessary, ablate with normal flow-matching loss
+[x] eval over checkpoints using lpips/clip/dinoscore
+  [] just to show d-opsd is necessary, ablate with normal flow-matching loss
+    - just need example image/similar to demonstrate
 
+[] given reasonable lr & rank, interesting comparisons are:
+  [] just_inf_timesteps (k or t)
+    - using lpips+dino; val loss won't be valid
+    [] shift timestepsm but only if k is less-good
 
 

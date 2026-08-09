@@ -9,12 +9,11 @@ from config import Config
 from train import main
 
 sweep_grid = {
-    "lr": [1e-5, 1e-4],
-    "lora_rank": [128, 16],
+    "lr": [4e-5],
+    "lora_rank": [128],
     "max_steps": [10_000],
-    'use_prompt': [''],
+    'use_prompt': ['The scene.'],
     'just_inf_timesteps': [True, False],
-    'shift_timesteps_resolution': [True],
 }
 
 def grid_configs(grid: dict):
