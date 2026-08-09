@@ -11,9 +11,12 @@ from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 def pil_to_n1_1_tensor(img):
     '''
     Convert a PIL image to a tensor in [-1, 1] range
+    shaped [N, 3, H, W]
     '''
     tensor = torch.from_numpy(np.array(img)) / 255 # [0,1]
     tensor = tensor * 2 - 1 # [-1,1]
+    # h, w, c -> 1, 3, h, w
+    tensor = tensor[None].permute(0, 3, 1, 2).expand(-1, 3, -1, -1)[:, :3]
 
     assert tensor.max() <= 1 and tensor.min() >= -1, ( 
                 f'Tensor range must be in [-1, 1], is [{tensor.min()}, {tensor.max()}]')
@@ -41,7 +44,8 @@ T = transforms.Compose([
 dino = ViTModel.from_pretrained('facebook/dino-vits16')
 
 
-def get_dinoscore(imgs: list[Image.Image]):
+def get_dinoscore(im1: Image.Image, im2: Image.Image):
+    imgs = [im1, im2]
     # https://github.com/google/dreambooth/issues/3 (from dreambooth repo)
     images = [T(im) for im in imgs]
 

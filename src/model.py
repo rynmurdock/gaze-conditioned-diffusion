@@ -174,8 +174,8 @@ class Zoo(torch.nn.Module):
         return velocity
 
     @torch.no_grad()
-    def inference(self, cond_img=None, scanpath=None, guidance_scale=1, generator=None):
-        assert cond_img or scanpath is not None 
+    def inference(self, cond_image=None, scanpath=None, guidance_scale=1, generator=None):
+        assert cond_image or scanpath is not None 
         width, height = self.config.resolution
         offload_vae_back_to_cpu = False
         # infer vae device from the all params
@@ -188,15 +188,15 @@ class Zoo(torch.nn.Module):
         else:
             prompt_embeds = self.pipe.cached_prompt
 
-        # if we've only given the scanpath but need it as a cond_img
-        if self.config.scanpath_as_edit_image and not cond_img:
-            cond_img = scanpath_over_pil_image(scanpath, w=width, h=height, just_path=True)
+        # if we've only given the scanpath but need it as a cond_image
+        if self.config.scanpath_as_edit_image and not cond_image:
+            cond_image = scanpath_over_pil_image(scanpath, w=width, h=height, just_path=True)
 
         # we may use cfg on our cond image
         self.pipe.config.is_distilled = False
         image = self.pipe(
                 # just smuggling for our image ids
-                image=cond_img if self.config.scanpath_as_edit_image else None,
+                image=cond_image if self.config.scanpath_as_edit_image else None,
                 latents=scanpath if not self.config.scanpath_as_edit_image else None,
                 num_inference_steps=4,
                 guidance_scale=guidance_scale,
