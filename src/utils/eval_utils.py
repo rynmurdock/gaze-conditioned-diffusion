@@ -29,7 +29,7 @@ def get_lpips(im1: Image.Image,
               ):
     t_im1 = pil_to_n1_1_tensor(im1)
     t_im2 = pil_to_n1_1_tensor(im2)
-    return lpips(t_im1, t_im2)
+    return lpips(t_im1, t_im2).item()
 
 
 # DINO Transforms

@@ -12,7 +12,6 @@ class Config:
     ### Model
     # model_path = None
     transformer_model_path = None
-    # lora_path = '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/pigmeat_Maldivian_Pennacook/15000_ckpt/pytorch_lora_weights.safetensors'
     lora_path = None
     seed: int = 13
 
@@ -26,7 +25,9 @@ class Config:
     sample_teacher: bool = True
 
     #### seems consistently better to do all t
-    just_inf_timesteps: bool = False
+    just_inf_timesteps: bool = True
+    # just_inf_timesteps will automatically already shift, so this does nothing
+    #   unless it's just_inf_timesteps=False
     shift_timesteps_resolution: bool = True
     ####
 
@@ -35,7 +36,7 @@ class Config:
 
     ### Hparams
     batch_size: int = 1
-    lr: float = 1e-4
+    lr: float = 4e-5
     use_prompt: str = 'The scene.'
     # teacher ultimately gives the input image back in most cases
     #   sans an instruction
@@ -69,8 +70,6 @@ class Config:
     exp_name: str = None
     save_path: str = './'
     freq: int = 1000 # how often we save/log/etc.
-
-
 
     def to_json(self, filename):
         # we don't want to mutate our actual class
