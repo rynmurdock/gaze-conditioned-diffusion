@@ -26,7 +26,7 @@ logging.basicConfig(level=logging.INFO)
 
 def main(config):
     verify_config_validity(config)
-    if config.lora_path or config.lora_rank:
+    if config.lora_path or config.transformer_model_path:
         # iterate data's seed when we're loading a checkpoint;
         #   ideally would start at the stopping point, but just new random is better than nothing
         logging.warning('''Advancing training config's seed by 1! for loading a ckpt for training''')

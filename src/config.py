@@ -12,7 +12,8 @@ class Config:
     ### Model
     # model_path = None
     transformer_model_path = None
-    lora_path = '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/pigmeat_Maldivian_Pennacook/15000_ckpt/pytorch_lora_weights.safetensors'
+    # lora_path = '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/pigmeat_Maldivian_Pennacook/15000_ckpt/pytorch_lora_weights.safetensors'
+    lora_path = None
     seed: int = 13
 
     #### seems consistently better to keep text encoder; use edit image
@@ -26,6 +27,7 @@ class Config:
 
     #### seems consistently better to do all t
     just_inf_timesteps: bool = False
+    shift_timesteps_resolution: bool = True
     ####
 
     quantize_adam: bool = False
@@ -33,9 +35,10 @@ class Config:
 
     ### Hparams
     batch_size: int = 1
-    lr: float = 4e-5
+    lr: float = 1e-4
     use_prompt: str = 'The scene.'
-    # TODO test how we can make this give the same re structure but not identical results?
+    # teacher ultimately gives the input image back in most cases
+    #   sans an instruction
     teacher_use_prompt: str = ''
 
     ### Training

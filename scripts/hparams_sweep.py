@@ -9,8 +9,12 @@ from config import Config
 from train import main
 
 sweep_grid = {
-    "lr":                  [1e-5,],
-    "lora_rank":           [512, 256, 1024],
+    "lr": [1e-5, 1e-4],
+    "lora_rank": [128, 16],
+    "max_steps": [10_000],
+    'use_prompt': [''],
+    'just_inf_timesteps': [True, False],
+    'shift_timesteps_resolution': [True],
 }
 
 def grid_configs(grid: dict):
@@ -18,7 +22,8 @@ def grid_configs(grid: dict):
     for combo in itertools.product(*values):
         yield Config(**dict(zip(keys, combo)))
 
-for cfg in grid_configs(sweep_grid):
+to_sweep = grid_configs(sweep_grid)
+for cfg in to_sweep:
     logging.info([f"Running: {n}={getattr(cfg, n)}" for n in sweep_grid.keys()])
     cfg.exp_name = "_".join([f"{n}={getattr(cfg, n)}" for n in sweep_grid.keys()])
     try:
@@ -26,3 +31,5 @@ for cfg in grid_configs(sweep_grid):
     except:
         logging.warning(f'{cfg.exp_name} failed.')
 
+
+# ./logs/nonfuturity_Danice_Efland/: sample_teacher=False; 

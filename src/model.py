@@ -20,7 +20,6 @@ def get_loss(model, image, scanpaths, config,
     sample_teacher = config.sample_teacher
     scanpath_as_edit_image = config.scanpath_as_edit_image
 
-
     dtype = model.dtype if not dtype else dtype
     with torch.no_grad():
         # rng drop out inputs
@@ -82,11 +81,12 @@ def get_loss(model, image, scanpaths, config,
                 u = compute_density_for_timestep_sampling(
                     weighting_scheme='logit_normal',
                     batch_size=x0.shape[0],
-                    logit_mean=-.5,
+                    logit_mean=0,
                     logit_std=1,
                 )
-                mu = compute_empirical_mu(noise.shape[1], 4)
-                u = math.exp(mu) / (math.exp(mu) + (1 / u - 1) ** 1)
+                if config.shift_timesteps_resolution:
+                    mu = compute_empirical_mu(noise.shape[1], 4)
+                    u = math.exp(mu) / (math.exp(mu) + (1 / u - 1) ** 1)
                 indices = (u * model.noise_scheduler_copy.config.num_train_timesteps).long()
                 timesteps = model.noise_scheduler_copy.timesteps[indices].to(device=x0.device)
             sigma = timesteps / 1000
@@ -174,28 +174,27 @@ class Zoo(torch.nn.Module):
         return velocity
 
     @torch.no_grad()
-    def do_qual_val(self, guidance_scale=4, im_n=0):
+    def inference(self, cond_img=None, scanpath=None, guidance_scale=1, generator=None):
+        assert cond_img or scanpath is not None 
+        width, height = self.config.resolution
         offload_vae_back_to_cpu = False
         # infer vae device from the all params
         if any([p.device != torch.device('cuda:0') for p in self.pipe.vae.parameters()]):
             offload_vae_back_to_cpu = True
             self.pipe.vae = self.pipe.vae.to('cuda')
-
         prompt_embeds = None
         if not self.config.remove_text_encoder and not isinstance(self.config.use_prompt, str):
             prompt_embeds = torch.zeros(1, 1, 7680).to(self.device, self.dtype)
         else:
             prompt_embeds = self.pipe.cached_prompt
 
-        width, height = self.config.resolution
+        # if we've only given the scanpath but need it as a cond_img
+        if self.config.scanpath_as_edit_image and not cond_img:
+            cond_img = scanpath_over_pil_image(scanpath, w=width, h=height, just_path=True)
 
-        latent_seed_generator = torch.Generator(device="cuda").manual_seed(self.seed)
-        for ind, this_seed in enumerate([self.seed, self.seed+179]):
-            scanpath_generator = torch.Generator(device="cuda").manual_seed(this_seed)
-            cond_img, scanpath = get_random_scanpath_cond_im(width, height, 
-                                                             generator=scanpath_generator)
-            self.pipe.config.is_distilled = False
-            image = self.pipe(
+        # we may use cfg on our cond image
+        self.pipe.config.is_distilled = False
+        image = self.pipe(
                 # just smuggling for our image ids
                 image=cond_img if self.config.scanpath_as_edit_image else None,
                 latents=scanpath if not self.config.scanpath_as_edit_image else None,
@@ -205,14 +204,25 @@ class Zoo(torch.nn.Module):
                 negative_prompt_embeds=prompt_embeds,
                 height=height,
                 width=width,
-                generator=latent_seed_generator,
+                generator=generator,
             ).images[0]
+        if offload_vae_back_to_cpu:
+            self.pipe.vae = self.pipe.vae.to('cpu')
+        return image
+
+    @torch.no_grad()
+    def do_qual_val(self, guidance_scale=1, im_n=0,):
+        latent_seed_generator = torch.Generator(device="cuda").manual_seed(self.seed)
+        for ind, this_seed in enumerate([self.seed, self.seed+179]):
+            scanpath_generator = torch.Generator(device="cuda").manual_seed(this_seed)
+            width, height = self.config.resolution
+            cond_img, scanpath = get_random_scanpath_cond_im(width, height, 
+                                                             generator=scanpath_generator)
+            image = self.inference(cond_img, scanpath, guidance_scale, latent_seed_generator)
+            logging.info(f'Saving at {self.config.log_dir}/sans_scanpath-latest_val_{ind}_{im_n}.png')
             image.save(f'{self.config.log_dir}/sans_scanpath-latest_val_{ind}_{im_n}.png')
             image = scanpath_over_pil_image(scanpath[0], image)
             image.save(f'{self.config.log_dir}/latest_val_{ind}_{im_n}.png')
-
-        if offload_vae_back_to_cpu:
-            self.pipe.vae = self.pipe.vae.to('cpu')
 
     
     @torch.no_grad()
@@ -304,7 +314,7 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
                                               torch_dtype=torch.float32,
                                               # we'll put things onto cuda ourselves
                                               device='cpu'
-                                              ).to('cpu')
+                                              ).to('cpu')    
 
     if config.activation_checkpointing:
         pipe.transformer.enable_gradient_checkpointing()

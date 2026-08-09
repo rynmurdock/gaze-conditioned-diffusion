@@ -1,4 +1,4 @@
-import torch
+import random
 import logging
 import urllib.request, os
 
@@ -20,8 +20,8 @@ def rng_proper_codename():
     normal_words = [word for word in words if word[0].islower()]
     upper_words = [word for word in words if word[0].isupper()]
     name_words = [word for word in upper_words if not word.isupper()]
-    rand_name = ' '.join([name_words[torch.randint(0, len(name_words), (1,))] for i in range(2)])
-    rand_non_name = normal_words[torch.randint(0, len(normal_words), (1,))]
+    rand_name = ' '.join([name_words[random.randint(0, len(name_words)-1)] for i in range(2)])
+    rand_non_name = normal_words[random.randint(0, len(normal_words)-1)]
     codename = f'{rand_non_name} {rand_name}'
     return codename
 

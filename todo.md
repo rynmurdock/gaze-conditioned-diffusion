@@ -24,7 +24,7 @@
     [x] patch pipe and setup qual eval
     [x] ckpt loading (see other notimplementederror)
     [x] condition on scanpath (not just fixation points)
-    - if you don't keep-distill train, would need to set a timestep schedule
+    - if you don't keep-distill train, def would need to set a timestep schedule
 
 
 [x] klein keep-distill training (https://arxiv.org/abs/2605.05204)
@@ -45,22 +45,24 @@
 [x] condition on points as edit image instead of RoPE
 [x] could look cool to predict the large/small shrinking & appearing fixation points as well
   - already does this a bit implicitly!
-[] light cfg on with/without gaze rope?
+[x] light cfg on with/without gaze cond img
 
 [x] Wandb-esque html
   [x] I don't need even tensorboard just the last val, train plots & images
 [x] copy config to saved ckpt
 
 [x] smoothing over scanpath
-[] scanpath statistics (e.g. average length)
+[x] scanpath statistics (e.g. average length)
+[x] remove sketches, drawings from data (ugly, simple, bad images)
 [x] compare the case where the art piece hides from you versus the one that follows
   [x] hides from you (with our changing latent at least) is super frustrating, as one might expect
 [x] remove grey padding on data
-  [] may still be some on vertical; worth bundling with scanpath stats, looking more at data
-[] further Klein speedup with vllm/llamaccp/etc.?
+  [] may still be some on vertical; worth checking+removing
 [x] fix LoRA saving+loading
 [] the scanpath masked for diffedit should keep latents *that you've looked at*
     not the ones at the location in the next tick.
+[] further Klein speedup with vllm/llamaccp/etc.?
+
 
 [] variations on famous painitngs by scanpath
   [] look through your existing data
@@ -69,13 +71,21 @@
 [] update image after several ticks, not every frame
   [] update such that all fixation points are either consistent or as far as possible
     [] can you differentiate?
+[] Visual beats w/ different content
+  - Mundane image w/ visual beats of art
+[] we still have "change portion that isn't visually interesting" to explore re consumption <> creation
+
 
 hparam sweep:
   - under-trained models?
   [x] lora rank
   [x] lr
-  [] logit normal params
+[x] compare teacher model sampling typical trajectory & with gt answer given
+[x] timestep shift by resolution
+
+[] starting writeup
+[] eval over checkpoints using lpips/clip/dinoscore
+  [] just to prove d-opsd is necessary, ablate with normal flow-matching loss
 
 
 
-[] compare teacher model sampling typical trajectory & with gt answer given

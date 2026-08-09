@@ -130,6 +130,16 @@ class ScanpathDataset(Dataset):
                 missing.append(key)
                 continue
 
+            excluded_types = ['Sketch', 
+                                'Noisy', 
+                                'LowResolution', 
+                                'LineDrawing']
+            if any([e in img_path for e in excluded_types]):
+                # don't use some subsets of data by topic
+                # logging.info(f'Skipping {img_path} as it is in an excluded type')
+                continue
+
+
             for rec in _iter_records(all_data[key]):
                 subj_name = _scalar_str(rec["name"])
                 fix = np.asarray(rec["data"], dtype=np.float32)
