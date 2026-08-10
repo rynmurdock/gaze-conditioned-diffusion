@@ -33,7 +33,13 @@
   - may be overfitting worse by only single trajectories per image
     [x] could use LoRA & switch on/off for student / teacher
   [x] qlora, train with adam, etc.
-  [] support batch_size > 1
+  [] batch_size > 1 training
+    [x] remove older cached latents feature
+    [x] remove older scanpath RoPE conditioning
+    [x] support batch_size > 1 RoPE
+    [x] pil images -> tensor -> vae
+    [] seq padding + attention masking
+
   [x] option to add back text encoder
     [x] can fall back to diffusers klein+pipe & patch the RoPE
   [x] use existing ckpt for guiding (boxes below) to proof out further changes.
@@ -74,7 +80,7 @@
 [] Visual beats w/ different content
   - Mundane image w/ visual beats of art
 [] we still have "change portion that isn't visually interesting" to explore re consumption <> creation
-
+[] blank canvas/static -> 12 points & see if you can get good
 
 hparam sweep:
   - under-trained models?
@@ -91,7 +97,13 @@ hparam sweep:
 
 [] given reasonable lr & rank, interesting comparisons are:
   [] just_inf_timesteps (k or t)
+    ./logs/kathemoglobin_Bonnette_Douai/ vs just_inf_version_corelates_Salzgitter_Steatornis
     - using lpips+dino; val loss won't be valid
-    [] shift timestepsm but only if k is less-good
+    [] try w/ shifting timesteps but only if k is close or less-good
+[] correlation between val loss & reconstruction metrics
+
+
+
+
 
 

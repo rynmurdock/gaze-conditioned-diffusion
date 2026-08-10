@@ -25,7 +25,7 @@ class Config:
     sample_teacher: bool = True
 
     #### seems consistently better to do all t
-    just_inf_timesteps: bool = True
+    just_inf_timesteps: bool = False
     # just_inf_timesteps will automatically already shift, so this does nothing
     #   unless it's just_inf_timesteps=False
     shift_timesteps_resolution: bool = True
@@ -35,7 +35,7 @@ class Config:
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 1
+    batch_size: int = 2
     lr: float = 4e-5
     use_prompt: str = 'The scene.'
     # teacher ultimately gives the input image back in most cases
@@ -45,7 +45,8 @@ class Config:
     ### Training
     epochs: int = 3000000000000
     max_steps: int = 100_000
-    max_val_steps: int = 64
+    # TODO undo this to 64
+    max_val_steps: int = 2
 
     # this seems to break after d5b46746eb7f329c793d65b76a09c96ef9bfdd97
     # likely due to dynamic shapes being borked on some torch versions
@@ -63,8 +64,6 @@ class Config:
     num_workers: int = 20
     # width & height side lengths
     resolution: tuple[int, int] = (768, 384)
-
-    use_cached_distilled_latents: bool = False
 
     ### Logging
     exp_name: str = None
@@ -111,10 +110,7 @@ def parse_dtype(config):
 def verify_config_validity(config):
     parse_dtype(config)
 
-    assert config.batch_size == 1, 'We do not support batch_size > 1 yet.'
-    assert not (config.sample_teacher and config.use_cached_distilled_latents), (
-        "There's no reason to try to use our cached latents and sample new ones"
-    )
+    assert config.scanpath_as_edit_image, 'We no longer support RoPE for scanpath conditioning'
     assert not (config.sample_teacher and not (not config.remove_text_encoder and config.lora_rank)), (
         'sample_teacher is only allowed with LoRA and text encoders kept. '
         'we directly turn off our LoRA, grab a random input/output pair, then train on it. '

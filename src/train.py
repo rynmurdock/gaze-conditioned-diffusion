@@ -66,7 +66,7 @@ Training {len(trained_params)} torch modules
 
     dataloader, val_dataloader = get_dataloader(config.data_path, config.val_data_split_ratio,
                                                  config.batch_size, config.num_workers, config.seed,
-                                                 config.resolution, config.use_cached_distilled_latents)
+                                                 config.resolution, )
     
     train_losses = []
     inner_train_losses = []
@@ -84,15 +84,13 @@ Training {len(trained_params)} torch modules
                     model.pipe.transformer.save_pretrained(f'{config.log_dir}/last_epoch_ckpt', from_pt=True)
                 return
             if batch is None or \
-                            (config.use_cached_distilled_latents and batch.get('latents', None) is None):
+                            (False and batch.get('latents', None) is None):
                 logging.warning(f'Skipping batch! {batch}')
                 continue
 
-            image = batch['images']
+            images = batch['pil_images']
             scanpaths = batch['scanpaths']
-            
             scanpaths = scanpaths.to(config.device)
-            image = image.to(config.device, config.dtype)
 
             if total_inds % config.freq == 0:
                 # NOTE autocasting because our fp32 training model is also our val model
@@ -119,13 +117,8 @@ Training {len(trained_params)} torch modules
                     validation_losses = []
 
 
-            loss, loss_logging_dict = get_loss(model, image, scanpaths, 
-                                               config=config,
-                                               latents=batch.get('latents'),
-                                               timesteps=batch.get('timesteps'),
-                                               noise_pred=batch.get('noise_preds'),
-                                               scanpath_sans_contents=batch.get('scanpath_sans_contents')
-                                               )
+            loss, loss_logging_dict = get_loss(model, images, scanpaths, config=config,
+                                               scanpath_sans_contents=batch.get('scanpath_sans_contents'))
             inner_train_losses.append(loss.item())
             loss.backward()
             optimizer.step()

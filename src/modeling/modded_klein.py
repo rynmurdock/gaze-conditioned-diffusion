@@ -233,7 +233,7 @@ def prepare_image_ids(
         image_latent_ids = []
         for x, t in zip(image_latents, t_coords):
             x = x.squeeze(0)
-            _, height, width = x.shape
+            height, width = x.shape[-2:]
 
             t = t.to('cpu', torch.int64)
             x_ids = torch.cartesian_prod(t, torch.arange(height), torch.arange(width), torch.arange(1, 2))

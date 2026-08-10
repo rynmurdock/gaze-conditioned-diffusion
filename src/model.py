@@ -13,10 +13,26 @@ from diffusers import BitsAndBytesConfig
 from diffusers.training_utils import compute_density_for_timestep_sampling
 import bitsandbytes as bnb
 from peft import LoraConfig
+from torchvision.transforms import functional as TF
 
-def get_loss(model, image, scanpaths, config,
-             latents=None, timesteps=None, noise_pred=None, scanpath_sans_contents=None,
-             dtype=None,):
+def ids_encode_pad_mask_images(model, images, dtype):
+    latents = []
+    image_ids = []
+    for pil_img in images:
+        img_tensor = TF.to_tensor(pil_img) * 2 - 1  # (3, H, W), values in [-1, 1]
+        img_tensor = img_tensor.to(model.device, dtype)[None]
+        latent = model.pipe._encode_vae_image(img_tensor, None)
+        imids = Flux2KleinPipeline._prepare_image_ids([latent]).to(latent.device)
+        image_ids.append(imids)
+        latents.append(latent)
+    padded_latents = torch.nn.utils.rnn.pad_sequence(latents, batch_first=True,).squeeze(1)
+    latents_there_mask = torch.nn.utils.rnn.pad_sequence([torch.ones_like(l) for l in latents], 
+                                                         batch_first=True, ).squeeze(1) > 0
+    image_ids = torch.nn.utils.rnn.pad_sequence(image_ids, batch_first=True).squeeze(1)
+    return padded_latents, image_ids, latents_there_mask
+
+def get_loss(model, images, scanpaths, config, 
+             scanpath_sans_contents=None, dtype=None,):
     sample_teacher = config.sample_teacher
     scanpath_as_edit_image = config.scanpath_as_edit_image
 
@@ -29,38 +45,15 @@ def get_loss(model, image, scanpaths, config,
         # so we don't do attention mask / padding to largest
         scanpaths[zeroing_mask] = 0
 
-        if latents is None:
-            x0 = model.pipe._encode_vae_image(image, None)
-        else:
-            # we load pre-encoded images
-            latents = latents.to(image.device)
-            noise_pred = noise_pred.to(image.device)
-            timesteps = timesteps.to(image.device)
-            teacher_noise_pred = noise_pred
-            # misnomer but fine for our purposes
-            x0 = target.new_zeros(
-                image.shape[0],
-                # take dit patch size into account
-                model.pipe.vae.config.latent_channels*4,
-                (int(image.shape[-2]) // (model.pipe.vae_scale_factor * 2)),
-                (int(image.shape[-1]) // (model.pipe.vae_scale_factor * 2)),
-                )
-
-        gaze_image_ids = prepare_image_ids([x0], scanpaths).to(x0.device)
-        typical_image_ids = Flux2KleinPipeline._prepare_image_ids([x0]).to(x0.device)
-        
-        if sample_teacher:
-            # TODO this duplicates vae encoding
-            image_latents, image_latent_ids = model.pipe.prepare_image_latents(
-                    images=[image],
-                    batch_size=x0.shape[0],
-                    generator=torch.Generator(device='cuda'),
-                    device=x0.device,
-                    dtype=x0.dtype,
-                )
+        # TODO latents_there_mask for attention masking
+        #   because x0 & hint are the same size, latents_there_mask can mask attn over
+        #   the latents & the hint
+        x0, typical_image_ids, latents_there_mask = ids_encode_pad_mask_images(model, 
+                                                                       images, model.config.dtype)
         if scanpath_as_edit_image:
+            # scanpath_sans_contents is always padded longest
             hint_latents, hint_ids = model.pipe.prepare_image_latents(
-                    images=[scanpath_sans_contents],
+                    images=[scanpath_sans_contents[:1]],
                     batch_size=x0.shape[0],
                     generator=torch.Generator(device='cuda'),
                     device=x0.device,
@@ -72,31 +65,30 @@ def get_loss(model, image, scanpaths, config,
         x0 = model.pipe._pack_latents(x0)
         noise = torch.randn_like(x0)
 
-        if latents is None:
-            if config.just_inf_timesteps:
-                timesteps = get_inf_timesteps(model.pipe.scheduler, x0, num_inference_steps=4, device='cuda',)
-                k = torch.randint(0, 4, (noise.shape[0],)).to(x0.device)
-                timesteps = timesteps[k]
-            else:
-                u = compute_density_for_timestep_sampling(
-                    weighting_scheme='logit_normal',
-                    batch_size=x0.shape[0],
-                    logit_mean=0,
-                    logit_std=1,
-                )
-                if config.shift_timesteps_resolution:
-                    mu = compute_empirical_mu(noise.shape[1], 4)
-                    u = math.exp(mu) / (math.exp(mu) + (1 / u - 1) ** 1)
-                indices = (u * model.noise_scheduler_copy.config.num_train_timesteps).long()
-                timesteps = model.noise_scheduler_copy.timesteps[indices].to(device=x0.device)
-            sigma = timesteps / 1000
-            latents = sigma * noise + (1 - sigma) * x0
+        if config.just_inf_timesteps:
+            timesteps = get_inf_timesteps(model.pipe.scheduler, x0, num_inference_steps=4, device='cuda',)
+            k = torch.randint(0, 4, (noise.shape[0],)).to(x0.device)
+            timesteps = timesteps[k]
+        else:
+            u = compute_density_for_timestep_sampling(
+                weighting_scheme='logit_normal',
+                batch_size=x0.shape[0],
+                logit_mean=0,
+                logit_std=1,
+            )
+            if config.shift_timesteps_resolution:
+                mu = compute_empirical_mu(noise.shape[1], 4)
+                u = math.exp(mu) / (math.exp(mu) + (1 / u - 1) ** 1)
+            indices = (u * model.noise_scheduler_copy.config.num_train_timesteps).long()
+            timesteps = model.noise_scheduler_copy.timesteps[indices].to(device=x0.device)
+        sigma = timesteps.view(-1, 1, 1) / 1000
+        latents = sigma * noise + (1 - sigma) * x0
 
         if sample_teacher:
             model.pipe.transformer.disable_lora()
             
-            latent_model_input = torch.cat([latents, image_latents], dim=1).to(model.pipe.transformer.dtype)
-            latent_image_ids = torch.cat([typical_image_ids, image_latent_ids], dim=1)
+            latent_model_input = torch.cat([latents, x0], dim=1).to(model.pipe.transformer.dtype)
+            latent_image_ids = torch.cat([typical_image_ids, typical_image_ids], dim=1)
             teacher_noise_pred = model(latent_model_input, 
                        timesteps=timesteps, image_ids=latent_image_ids, 
                        prompt_embeds=model.pipe.cached_teacher_prompt,
@@ -112,7 +104,7 @@ def get_loss(model, image, scanpaths, config,
             latent_image_ids = torch.cat([typical_image_ids, hint_ids], dim=1)
 
         output = model(latents if not scanpath_as_edit_image else latent_model_input, 
-                       timesteps=timesteps, image_ids=gaze_image_ids if not scanpath_as_edit_image else latent_image_ids,
+                       timesteps=timesteps, image_ids=latent_image_ids,
                        prompt_embeds=model.pipe.cached_prompt,
                        txt_ids=model.pipe.cached_txt_ids,
                        )
@@ -120,7 +112,7 @@ def get_loss(model, image, scanpaths, config,
         if scanpath_as_edit_image:
             output = output[:, : latents.size(1) :]
 
-    if noise_pred is None and not sample_teacher:
+    if not sample_teacher:
         target = noise - x0
     else:
         target = teacher_noise_pred
@@ -238,19 +230,14 @@ class Zoo(torch.nn.Module):
                 if batch is None:
                     continue
 
-                image, scanpaths = batch['images'], batch['scanpaths']
-                image = image.to(self.device, dtype)
+                images, scanpaths = batch['pil_images'], batch['scanpaths']
                 scanpaths = scanpaths.to(self.device)
                 loss, loss_logging_dict = get_loss(self, 
-                                               image, scanpaths, 
-                                               config=self.config,
-                                               latents=batch.get('latents'),
-                                               timesteps=batch.get('timesteps'),
-                                               noise_pred=batch.get('noise_preds'),
+                                               images, scanpaths, config=self.config,
                                                scanpath_sans_contents=batch.get('scanpath_sans_contents'),
                                                )
                 losses.append(loss.item())
-                if index > max_val_steps:
+                if index >= max_val_steps:
                     return sum(losses) / len(losses)
             return sum(losses) / len(losses)
 
@@ -308,26 +295,25 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
         # inplace operation
         add_lora(transformer, config.lora_rank)
 
+    if config.batch_size > 1:
+        from modeling.klein_batched_rope import batchify_transformer_rope
+        transformer = batchify_transformer_rope(transformer)
+
     pipe = ImageCFGFlux2KleinPipeline.from_pretrained("black-forest-labs/FLUX.2-klein-4B", 
                                               transformer=transformer,
                                               # full precision weights
                                               torch_dtype=torch.float32,
                                               # we'll put things onto cuda ourselves
                                               device='cpu'
-                                              ).to('cpu')    
+                                              ).to('cpu')
 
     if config.activation_checkpointing:
         pipe.transformer.enable_gradient_checkpointing()
 
-    if not config.use_cached_distilled_latents:
-        print(dtype)
-        pipe.vae = pipe.vae.to(device, dtype)
-        if do_compile:
-            pipe.vae = torch.compile(pipe.vae)
-        assert not any([p.device != torch.device('cuda:0') for p in pipe.vae.parameters()]), [n for n, p in pipe.vae.named_parameters() if p.device != torch.device('cuda:0')]
-    else:
-        # we can solely put our vae onto cuda only for our qual validation where we need decoding
-        pipe.vae = pipe.vae.to('cpu', dtype)
+    pipe.vae = pipe.vae.to(device, dtype)
+    if do_compile:
+        pipe.vae = torch.compile(pipe.vae)
+    assert not any([p.device != torch.device('cuda:0') for p in pipe.vae.parameters()]), [n for n, p in pipe.vae.named_parameters() if p.device != torch.device('cuda:0')]
 
     pipe.cached_prompt, pipe.cached_txt_ids = None, None
     pipe.cached_teacher_prompt, pipe.cached_teacher_txt_ids = None, None

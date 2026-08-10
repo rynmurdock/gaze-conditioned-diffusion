@@ -89,7 +89,6 @@ class ScanpathDataset(Dataset):
     One sample = one subject's ordered scanpath over one stimulus image.
 
     Returns a dict:
-        image:     FloatTensor (3, H, W), stimulus resized to `stim_size`
         scanpath:  FloatTensor (N, 2) [x, y], coordinates rescaled to
                    match the resized image, fixation order preserved
                    (row 0 = first fixation)
@@ -102,7 +101,7 @@ class ScanpathDataset(Dataset):
     IMG_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff")
 
     def __init__(self, root, mat_path, stim_size=(512, 512), 
-                 coord_order="xy", use_cached_distilled_latents=False,
+                 coord_order="xy",
                  ):
         """
         root:        dataset root containing `stimuli/`
@@ -111,7 +110,6 @@ class ScanpathDataset(Dataset):
         coord_order: 'xy' if data columns are [x, y]; 'yx' if [y, x]
         """
 
-        self.use_cached_distilled_latents = use_cached_distilled_latents
         self.root = root
         # Keys are already relative paths like 'Action/001.jpg', matching
         # Stimuli/Action/001.jpg on disk directly - no lookup table needed.
@@ -130,15 +128,11 @@ class ScanpathDataset(Dataset):
                 missing.append(key)
                 continue
 
-            excluded_types = ['Sketch', 
-                                'Noisy', 
-                                'LowResolution', 
-                                'LineDrawing']
+            excluded_types = ["Sketch", "Noisy", "LowResolution", "LineDrawing"]
             if any([e in img_path for e in excluded_types]):
-                # don't use some subsets of data by topic
+                # skip use some subsets of data by subfolder topic
                 # logging.info(f'Skipping {img_path} as it is in an excluded type')
                 continue
-
 
             for rec in _iter_records(all_data[key]):
                 subj_name = _scalar_str(rec["name"])
@@ -173,13 +167,12 @@ class ScanpathDataset(Dataset):
         pil_img = pil_img.crop((left, 0, right, orig_h))
         crop_w = pil_img.width
         pil_img = pil_img.resize(self.stim_size, Image.BILINEAR)
-        img_tensor = TF.to_tensor(pil_img) * 2 - 1  # (3, H, W), values in [-1, 1]
 
         # --- ordered scanpath ---
         fix = fix.copy()
         if self.coord_order == "yx":
             fix = fix[:, [1, 0]]
-        
+
         fix[:, 0] -= left
 
         scale_x = self.stim_size[0] / crop_w
@@ -187,17 +180,10 @@ class ScanpathDataset(Dataset):
         fix[:, 0] *= scale_x
         fix[:, 1] *= scale_y
 
-
         scanpath = torch.from_numpy(fix)
-        scanpath_sans_contents = scanpath_over_pil_image(scanpath, pil_img, just_path=True)
-        # (3, H, W), values in [-1, 1]
-        scanpath_sans_contents = TF.to_tensor(scanpath_sans_contents) * 2 - 1
-        
 
         ex = {
-            "scanpath_sans_contents": scanpath_sans_contents,
             "pil_img": pil_img,
-            "image": img_tensor,
             "scanpath": scanpath,
             "length": scanpath.shape[0],
             "stim_name": stim_key,
@@ -205,31 +191,8 @@ class ScanpathDataset(Dataset):
             'img_path': img_path,
         }
 
-        if self.use_cached_distilled_latents:
-            # e.g. ./klein_latents_stimuli/trainSet/Stimuli/LowResolution/011.jpg_latent_1.pt
-            # choose randomly from from the K=[1,4] timesteps.
-            ind = str(int(torch.randint(0, 4, (1,)).item()))
-            latent_path = f'klein_latents_stimuli/{img_path}_latent_{ind}.pt'
-            noise_pred_path = f'klein_latents_stimuli/{img_path}_noise_pred_{ind}.pt'
-            timestep_path = f'klein_latents_stimuli/{img_path}_timestep_{ind}.pt'
-
-            if any([not os.path.exists(a) for a in [latent_path, noise_pred_path, timestep_path]]):
-                return 
-
-            latent = torch.load(latent_path, map_location='cpu', weights_only=False)
-            if latent.shape[-1] != 128:
-                batch_size, num_channels, height, width = latent.shape
-                latent = latent.reshape(batch_size, num_channels, height * width).permute(0, 2, 1)
-            noise_pred = torch.load(noise_pred_path, map_location='cpu', weights_only=False)
-            timestep = torch.load(timestep_path, map_location='cpu', weights_only=False)
-
-            ex['timestep'] = timestep
-            ex['latent'] = latent
-            ex['noise_pred'] = noise_pred
-
-
         return ex
-    
+
 def _detect_horizontal_pad(arr, pad_color=(126, 126, 126), tol=10):
     """
     arr: (H, W, 3) uint8 array.
@@ -250,7 +213,7 @@ def _detect_horizontal_pad(arr, pad_color=(126, 126, 126), tol=10):
 
     if right <= left:      # degenerate/all-pad safety net
         return 0, W
-    return left, right
+    return left, right    
 
 def collate_scanpaths(batch):
     """
@@ -258,19 +221,17 @@ def collate_scanpaths(batch):
     stacked. Also returns true lengths for masking / pack_padded_sequence.
     """
     try:
-        images = torch.stack([b["image"] for b in batch], dim=0)
-        scanpath_sans_contents = torch.stack([b["scanpath_sans_contents"] for b in batch], dim=0)
+        # we can just take the max to get our scanpath images
+        mh, mw = max([b['pil_img'].height for b in batch]), max([b['pil_img'].width for b in batch])
+        l_scanpaths_sans_contents = []
+        for b in batch:
+            scanpath_sans_contents = scanpath_over_pil_image(b['scanpath'], h=mh, w=mw, just_path=True)
+            scanpath_sans_contents = TF.to_tensor(scanpath_sans_contents) * 2 - 1
+            l_scanpaths_sans_contents.append(scanpath_sans_contents)
 
-        latents = None
-        timesteps = None
-        noise_preds = None
-        if batch[0].get("latent") is not None:
-            latents = torch.cat([b["latent"] for b in batch], dim=0)
-            timesteps = torch.stack([b["timestep"] for b in batch], dim=0)
-            noise_preds = torch.cat([b["noise_pred"] for b in batch], dim=0)
-
+        # (3, H, W), values in [-1, 1]
+        scanpath_sans_contents = torch.stack(l_scanpaths_sans_contents, dim=0)
         lengths = torch.tensor([b["length"] for b in batch], dtype=torch.long)
-
         n_coords = batch[0]["scanpath"].shape[1]
         t_max = int(lengths.max().item())
 
@@ -285,23 +246,18 @@ def collate_scanpaths(batch):
 
         return {
             "scanpath_sans_contents": scanpath_sans_contents,
-            "images": images,          # (B, 3, H, W)
             "scanpaths": scanpaths,    # (B, T_max, C), zero-padded past `lengths`
             "lengths": lengths,        # (B,)
             "stim_names": stim_names,
             "pil_images": pil_images,
             "image_paths": image_paths,
-            "latents": latents,
-            "timesteps": timesteps,
-            "noise_preds": noise_preds,
         }
     except Exception as e:
         logging.warning(e)
         return
 
 def get_dataloader(
-        data_path, val_data_split_ratio,
-        batch_size, num_workers, seed, resolution, use_cached_distilled_latents
+        data_path, val_data_split_ratio, batch_size, num_workers, seed, resolution,
         ):
     # root should contain a `Stimuli/` subfolder (e.g. Stimuli/Action/001.jpg)
 
@@ -311,7 +267,6 @@ def get_dataloader(
         root=data_path,
         mat_path=f"{data_path}/allFixData.mat",
         stim_size=resolution,
-        use_cached_distilled_latents=use_cached_distilled_latents,
     )
 
     assert val_data_split_ratio < 1 and val_data_split_ratio > 0
@@ -326,7 +281,7 @@ def get_dataloader(
 
     train_loader = DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
                         shuffle=True, collate_fn=collate_scanpaths)
-    val_loader = DataLoader(val_data, batch_size=batch_size, num_workers=num_workers,
+    val_loader = DataLoader(val_data, batch_size=1, num_workers=num_workers,
                         shuffle=False, collate_fn=collate_scanpaths)
     
     return train_loader, val_loader
@@ -341,7 +296,6 @@ if __name__ == "__main__":
     loader = DataLoader(dataset, batch_size=8, shuffle=True, collate_fn=collate_scanpaths)
 
     batch = next(iter(loader))
-    print("images:   ", batch["images"].shape)      # (8, 3, 256, 256)
     print("scanpaths:", batch["scanpaths"].shape)   # (8, T_max, 2 or 3)
     print("scanpaths:", batch["scanpaths"][0])   # (Ex. first in batch)
     print("lengths:  ", batch["lengths"])

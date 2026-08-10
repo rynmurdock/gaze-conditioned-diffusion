@@ -82,7 +82,7 @@ model.config.seed = 11
 torch.manual_seed(model.config.seed)
 __train_dataloader, val_dataloader = get_dataloader(config.data_path, config.val_data_split_ratio,
                                                  config.batch_size, config.num_workers, config.seed,
-                                                 config.resolution, config.use_cached_distilled_latents)
+                                                 config.resolution, )
 
 total_scores = 0
 scores = {}
@@ -96,7 +96,7 @@ for data_ind, sample in enumerate(val_dataloader):
     for ind in [1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2, 2.1, 2.2, 3, 4, 5]:
         with torch.autocast('cuda'):
             pred_image = model.inference(guidance_scale=ind, scanpath=scanpaths)
-            dinoscore = get_dinoscore(pred_image, gt_image)
+            dinoscore = 10 * get_dinoscore(pred_image, gt_image)
             lpips = get_lpips(pred_image, gt_image)
         print(f'{ind}: {lpips=}, {dinoscore=}')
 

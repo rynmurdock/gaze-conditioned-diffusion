@@ -98,6 +98,7 @@ def process_batch(pipe, batch, config, ):
 
 
 def main(config):
+    raise(AttributeError('We no longer support cached latents'))
     np.random.seed(config.seed)
     torch.manual_seed(config.seed)
 
@@ -107,7 +108,7 @@ def main(config):
 
     dataloader, val_dataloader = get_dataloader(config.data_path, config.val_data_split_ratio,
                                                  config.batch_size, config.num_workers, config.seed,
-                                                 config.resolution, False)
+                                                 config.resolution, )
     pipe.transformer = torch.compile(pipe.transformer)
     pipe.vae = torch.compile(pipe.vae)
 
