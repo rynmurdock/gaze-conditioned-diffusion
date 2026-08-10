@@ -142,7 +142,7 @@ class ScanpathDataset(Dataset):
                 self.samples.append((img_path, key, fix, subj_name))
 
         if missing:
-            print(
+            logging.info(
                 f"[ScanpathDataset] warning: {len(missing)} Map key(s) had no "
                 f"matching file under {self.stim_dir}, e.g. {missing[:3]}"
             )
@@ -296,9 +296,8 @@ if __name__ == "__main__":
     loader = DataLoader(dataset, batch_size=8, shuffle=True, collate_fn=collate_scanpaths)
 
     batch = next(iter(loader))
-    print("scanpaths:", batch["scanpaths"].shape)   # (8, T_max, 2 or 3)
-    print("scanpaths:", batch["scanpaths"][0])   # (Ex. first in batch)
-    print("lengths:  ", batch["lengths"])
-    print("stimuli:  ", batch["stim_names"])
+    logging.info("scanpaths:", batch["scanpaths"].shape)   # (8, T_max, 2 or 3)
+    logging.info("scanpaths:", batch["scanpaths"][0])   # (Ex. first in batch)
+    logging.info("lengths:  ", batch["lengths"])
+    logging.info("stimuli:  ", batch["stim_names"])
 
-# TODO logging.infos

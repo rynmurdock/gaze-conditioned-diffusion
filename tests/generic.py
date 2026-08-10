@@ -8,13 +8,11 @@ import logging
 import requests
 import torch
 
-import numpy as np
 from PIL import Image
 from diffusers import Flux2Transformer2DModel
 
 sys.path.append('/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/src/')
 
-# from utils.eval_utils import pil_to_n1_1_tensor, get_dinoscore
 
 
 """
@@ -110,7 +108,79 @@ def test_batched_rope():
 
     assert torch.equal(batch_size_1_out, batch_size_3_out[:1])
 
+def test_attention_mask_and_batched_rope():
+    transformer = build_stub_transformer().to('cpu', torch.bfloat16)
+    
+    torch.manual_seed(7)
+    latents = torch.randn((1, 7, 16,), device='cpu', dtype=torch.bfloat16)
+    timesteps = torch.randint(0, 1000, (1,)).to(latents.device, latents.dtype)
+    p_embs = torch.randn((1, 4, 4)).to(latents.device, latents.dtype)
+    txt_ids = torch.randint(0, 100, (4, 4)).to(latents.device, latents.dtype)
+    img_ids = torch.randint(0, 100, (7, 4)).to(latents.device, latents.dtype)
+
+    batch_size_1_out = transformer(
+        hidden_states=latents,  # (B, image_seq_len, C)
+        timestep=timesteps / 1000,
+        guidance=None,
+        encoder_hidden_states=p_embs,
+        txt_ids=txt_ids,
+        img_ids=img_ids,
+        return_dict=False,
+    )[0]
+
+    from modeling.klein_batched_rope import batchify_transformer_rope
+    transformer = batchify_transformer_rope(transformer)
+
+    two_latents = torch.randn((1, 18, 16,), device='cpu', dtype=torch.bfloat16)
+    two_timesteps = torch.randint(0, 1000, (1,)).to(latents.device, latents.dtype)
+    two_p_embs = torch.randn((1, 4, 4)).to(latents.device, latents.dtype)
+    two_txt_ids = torch.randint(0, 100, (1, 4, 4)).to(latents.device, latents.dtype)
+    two_img_ids = torch.randint(0, 100, (1, 18, 4)).to(latents.device, latents.dtype)
+
+    ones_ls = [torch.ones_like(l) for l in [latents[0], two_latents[0]]]
+    latents_there_mask = torch.nn.utils.rnn.pad_sequence(ones_ls, 
+                                                         batch_first=True).squeeze(1)
+
+    latents = torch.nn.utils.rnn.pad_sequence([latents[0], two_latents[0]], 
+                                                    batch_first=True, padding_value=10000).squeeze(1)
+    timesteps = torch.cat([timesteps, two_timesteps])
+    p_embs = torch.cat([p_embs, two_p_embs])
+    txt_ids = torch.cat([txt_ids[None], two_txt_ids])
+    img_ids = torch.nn.utils.rnn.pad_sequence([img_ids, two_img_ids[0]], 
+                                                    batch_first=True,).squeeze(1)
+    # TODO more e2e test
+
+    attn_mask = latents_there_mask.sum(-1)
+    attn_mask = torch.nn.functional.pad(attn_mask, (4, 0,), value=1) != 0.
+
+    batch_size_3_out = transformer(
+            hidden_states=latents,  # (B, image_seq_len, C)
+            timestep=timesteps / 1000,
+            guidance=None,
+            encoder_hidden_states=p_embs,
+            txt_ids=txt_ids,
+            img_ids=img_ids,  # B, image_seq_len, 4
+            joint_attention_kwargs={'attention_mask':attn_mask},
+            return_dict=False,
+        )[0]
+
+    batch_size_3_out_sans_mask = transformer(
+                hidden_states=latents,  # (B, image_seq_len, C)
+                timestep=timesteps / 1000,
+                guidance=None,
+                encoder_hidden_states=p_embs,
+                txt_ids=txt_ids,
+                img_ids=img_ids,  # B, image_seq_len, 4
+                return_dict=False,
+            )[0]
+    batch_size_3_out_sans_mask = batch_size_3_out_sans_mask[:, : latents.size(1) :]
+    batch_size_3_out = batch_size_3_out[:, : latents.size(1) :]
+    batch_size_1_out = batch_size_1_out[:, : latents.size(1) :]
+    assert torch.equal(batch_size_1_out, batch_size_3_out[:1, :batch_size_1_out.shape[1]]), (batch_size_1_out - batch_size_3_out[:1, :batch_size_1_out.shape[1]]).abs().max()
+
 def test_dinoscore():
+    from utils.eval_utils import pil_to_n1_1_tensor, get_dinoscore
+
     # Get images from Figure 11
     urls = [
         'https://github.com/google/dreambooth/blob/main/dataset/rc_car/03.jpg?raw=true', # reference from Fig 11
@@ -125,6 +195,6 @@ def test_dinoscore():
     assert abs(metric - 0.770) < 0.001, (
                     f'Metric is {abs(metric - 0.770)} away from known good')
 
-# on cpu rn; uncomment all other lines after
 # test_dinoscore()
-test_batched_rope()
+# test_batched_rope()
+test_attention_mask_and_batched_rope()

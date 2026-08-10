@@ -26,8 +26,8 @@ class Config:
 
     #### seems consistently better to do all t
     just_inf_timesteps: bool = False
-    # just_inf_timesteps will automatically already shift, so this does nothing
-    #   unless it's just_inf_timesteps=False
+    # just_inf_timesteps will automatically already shift, 
+    #   so this does nothing if just_inf_timesteps=False
     shift_timesteps_resolution: bool = True
     ####
 
@@ -35,7 +35,7 @@ class Config:
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 2
+    batch_size: int = 3
     lr: float = 4e-5
     use_prompt: str = 'The scene.'
     # teacher ultimately gives the input image back in most cases
@@ -45,8 +45,7 @@ class Config:
     ### Training
     epochs: int = 3000000000000
     max_steps: int = 100_000
-    # TODO undo this to 64
-    max_val_steps: int = 2
+    max_val_steps: int = 64
 
     # this seems to break after d5b46746eb7f329c793d65b76a09c96ef9bfdd97
     # likely due to dynamic shapes being borked on some torch versions
@@ -68,7 +67,8 @@ class Config:
     ### Logging
     exp_name: str = None
     save_path: str = './'
-    freq: int = 1000 # how often we save/log/etc.
+    # TODO adjust this back to higher
+    freq: int = 50 # how often we save/log/etc.
 
     def to_json(self, filename):
         # we don't want to mutate our actual class

@@ -414,7 +414,6 @@ class Flux2KleinPipeline(DiffusionPipeline, Flux2LoraLoaderMixin):
         generator: torch.Generator,
         latents: torch.Tensor | None = None,
     ):
-        # TODO 
         # I don't want to repatch things right now lol
         scanpath = latents
         latents = None

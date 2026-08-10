@@ -39,15 +39,9 @@ def get_loss(model, images, scanpaths, config,
     dtype = model.dtype if not dtype else dtype
     with torch.no_grad():
         # rng drop out inputs
-        # TODO set drop rate into model from config
         zeroing_mask = torch.rand((scanpaths.shape[0], scanpaths.shape[1])) < .3
-        # NOTE our stimuli are actually all the same image size
-        # so we don't do attention mask / padding to largest
         scanpaths[zeroing_mask] = 0
 
-        # TODO latents_there_mask for attention masking
-        #   because x0 & hint are the same size, latents_there_mask can mask attn over
-        #   the latents & the hint
         x0, typical_image_ids, latents_there_mask = ids_encode_pad_mask_images(model, 
                                                                        images, model.config.dtype)
         if scanpath_as_edit_image:
@@ -63,6 +57,11 @@ def get_loss(model, images, scanpaths, config,
             hint_latents[hint_drop_mask] = 0
 
         x0 = model.pipe._pack_latents(x0)
+        # NOTE because x0 & hint are the same size, 
+        #   latents_there_mask can mask attn over both the teacher's given gt
+        #   and the student's scanpath hint when we repeat it along the seq dim
+        latents_there_mask = model.pipe._pack_latents(latents_there_mask)
+
         noise = torch.randn_like(x0)
 
         if config.just_inf_timesteps:
@@ -93,6 +92,7 @@ def get_loss(model, images, scanpaths, config,
                        timesteps=timesteps, image_ids=latent_image_ids, 
                        prompt_embeds=model.pipe.cached_teacher_prompt,
                        txt_ids=model.pipe.cached_teacher_txt_ids,
+                       latents_attention_mask=latents_there_mask.repeat(1, 2, 1),
                        )
             teacher_noise_pred = teacher_noise_pred[:, : latents.size(1) :]
             model.pipe.transformer.enable_lora()
@@ -107,6 +107,7 @@ def get_loss(model, images, scanpaths, config,
                        timesteps=timesteps, image_ids=latent_image_ids,
                        prompt_embeds=model.pipe.cached_prompt,
                        txt_ids=model.pipe.cached_txt_ids,
+                       latents_attention_mask=latents_there_mask.repeat(1, 2, 1),
                        )
 
         if scanpath_as_edit_image:
@@ -119,10 +120,13 @@ def get_loss(model, images, scanpaths, config,
 
     output = output.to(torch.float32)
     target = target.to(torch.float32)
-    mse_loss = torch.nn.functional.mse_loss(target, output).mean()
-    loss = mse_loss
+    loss = (target - output)**2
+    # mask anywhere we don't have contents
+    loss[~latents_there_mask] = 0
+    # mean over batch last
+    loss = loss.flatten(1).mean(1).mean()
 
-    logging_dict = {'mse_loss': mse_loss.item(),}
+    logging_dict = {'mse_loss': loss.item(),}
     return loss, logging_dict
 
 def get_random_scanpath_cond_im(width, height, generator, ):
@@ -149,11 +153,19 @@ class Zoo(torch.nn.Module):
 
         self.noise_scheduler_copy = deepcopy(pipe.scheduler)
 
-    def forward(self, latents, timesteps, image_ids, prompt_embeds=None, txt_ids=None):
+    def forward(self, latents, timesteps, image_ids, 
+                prompt_embeds=None, txt_ids=None, latents_attention_mask=None):
+        # latents_attention_mask: zeroes where padded & ones where contents of shape [B, S, D]
+
         if prompt_embeds is None:
             prompt_embeds = torch.zeros(latents.shape[0], 1, 7680).to(latents.device, latents.dtype)
             txt_ids = torch.zeros(latents.shape[0], 4).to(latents.device, latents.dtype)
-        
+
+        # account for text first in sequence; sum for just the [B, L], make boolean
+        latents_attention_mask = latents_attention_mask.sum(-1)
+        attention_mask = torch.nn.functional.pad(latents_attention_mask, 
+                                                 (prompt_embeds.shape[1], 0,), value=1) != 0.
+
         velocity = self.pipe.transformer(
                 hidden_states=latents,  # (B, image_seq_len, C)
                 timestep=timesteps / 1000,
@@ -161,6 +173,7 @@ class Zoo(torch.nn.Module):
                 encoder_hidden_states=prompt_embeds,
                 txt_ids=txt_ids,
                 img_ids=image_ids,  # B, image_seq_len, 4
+                joint_attention_kwargs={'attention_mask':attention_mask},
                 return_dict=False,
         )[0]
         return velocity

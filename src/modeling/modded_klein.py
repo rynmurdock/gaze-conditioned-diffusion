@@ -63,7 +63,6 @@ def prepare_latents(
     generator: torch.Generator,
     latents: torch.Tensor | None = None,
 ):
-    # TODO 
     # I don't want to repatch things right now lol
     scanpath = latents
     latents = None
@@ -226,7 +225,7 @@ def prepare_image_ids(
         t_coords = [scale + scale * t for t in torch.arange(0, len(image_latents))]
         t_coords = [t.view(-1) for t in t_coords]
 
-        # TODO bs = 1
+        assert scanpath.shape[0] == 1, 'this path only supports bs=1'
         scanpath = scanpath[0]
         rescaled_scanpaths = [(n[0]//16, n[1]//16) for n in scanpath]
 
@@ -246,7 +245,6 @@ def prepare_image_ids(
             x, y = scanpath_xy
             if x == -1 and y == -1:
                 continue
-            # TODO decide if I want to include scanpaths that are out of the window
             if y * width + x < scanpath_ns.shape[0]:
                 scanpath_ns[int(y * width + x)] = (ind + 1) * 5
 

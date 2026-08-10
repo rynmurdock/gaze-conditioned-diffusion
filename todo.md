@@ -36,9 +36,9 @@
   [] batch_size > 1 training
     [x] remove older cached latents feature
     [x] remove older scanpath RoPE conditioning
-    [x] support batch_size > 1 RoPE
+    [x] support batch_size > 1 RoPE with test
     [x] pil images -> tensor -> vae
-    [] seq padding + attention masking
+    [x] seq padding + attention masking with test
 
   [x] option to add back text encoder
     [x] can fall back to diffusers klein+pipe & patch the RoPE
