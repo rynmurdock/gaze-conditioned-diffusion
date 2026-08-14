@@ -12,7 +12,8 @@ class Config:
     ### Model
     # model_path = None
     transformer_model_path = None
-    lora_path = None
+    lora_path = '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/apostatising_Laennec_Phiona/53000_ckpt/pytorch_lora_weights.safetensors'
+
     seed: int = 13
 
     #### seems consistently better to keep text encoder; use edit image
@@ -28,7 +29,7 @@ class Config:
     just_inf_timesteps: bool = False
     # just_inf_timesteps will automatically already shift, 
     #   so this does nothing if just_inf_timesteps=False
-    shift_timesteps_resolution: bool = True
+    shift_timesteps_resolution: bool = False
     ####
 
     quantize_adam: bool = False
@@ -38,8 +39,9 @@ class Config:
     batch_size: int = 3
     lr: float = 4e-5
     use_prompt: str = 'The scene.'
-    # teacher ultimately gives the input image back in most cases
-    #   sans an instruction
+
+    # teacher gives the input image back in most cases
+    #   sans instruction
     teacher_use_prompt: str = ''
 
     ### Training
@@ -63,12 +65,12 @@ class Config:
     num_workers: int = 20
     # width & height side lengths
     resolution: tuple[int, int] = (768, 384)
+    included_data_subsets: tuple[str] = ('Art', )
 
     ### Logging
     exp_name: str = None
     save_path: str = './'
-    # TODO adjust this back to higher
-    freq: int = 50 # how often we save/log/etc.
+    freq: int = 1000 # how often we save/log/etc.
 
     def to_json(self, filename):
         # we don't want to mutate our actual class
@@ -110,6 +112,8 @@ def parse_dtype(config):
 def verify_config_validity(config):
     parse_dtype(config)
 
+    assert isinstance(config.included_data_subsets, tuple), ('We are parsing a tuple of strings, not a string'
+                '(This warning avoids parsing each character in a subset as its own inclusion string!)')
     assert config.scanpath_as_edit_image, 'We no longer support RoPE for scanpath conditioning'
     assert not (config.sample_teacher and not (not config.remove_text_encoder and config.lora_rank)), (
         'sample_teacher is only allowed with LoRA and text encoders kept. '

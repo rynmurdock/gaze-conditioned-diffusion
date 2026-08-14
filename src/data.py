@@ -101,6 +101,7 @@ class ScanpathDataset(Dataset):
     IMG_EXTS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff")
 
     def __init__(self, root, mat_path, stim_size=(512, 512), 
+                 included_data_subsets=None,
                  coord_order="xy",
                  ):
         """
@@ -128,10 +129,10 @@ class ScanpathDataset(Dataset):
                 missing.append(key)
                 continue
 
-            excluded_types = ["Sketch", "Noisy", "LowResolution", "LineDrawing"]
-            if any([e in img_path for e in excluded_types]):
+            if (included_data_subsets and 
+                not any([image_type in img_path for image_type in included_data_subsets])):
                 # skip use some subsets of data by subfolder topic
-                # logging.info(f'Skipping {img_path} as it is in an excluded type')
+                logging.warning(f'Skipping {img_path} as it is not an included image type')
                 continue
 
             for rec in _iter_records(all_data[key]):
@@ -258,15 +259,18 @@ def collate_scanpaths(batch):
 
 def get_dataloader(
         data_path, val_data_split_ratio, batch_size, num_workers, seed, resolution,
+        config,
         ):
     # root should contain a `Stimuli/` subfolder (e.g. Stimuli/Action/001.jpg)
 
     # TODO init and this setup should be modified to be config -> dataloader
     #     required params can be args while rest are in the config.
+    
     dataset = ScanpathDataset(
         root=data_path,
         mat_path=f"{data_path}/allFixData.mat",
         stim_size=resolution,
+        included_data_subsets=config.included_data_subsets
     )
 
     assert val_data_split_ratio < 1 and val_data_split_ratio > 0

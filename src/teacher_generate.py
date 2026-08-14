@@ -110,7 +110,8 @@ def main(config):
                                                  config.batch_size, config.num_workers, config.seed,
                                                  config.resolution, )
     pipe.transformer = torch.compile(pipe.transformer)
-    pipe.vae = torch.compile(pipe.vae)
+    pipe.vae.encode = torch.compile(pipe.vae.encode)
+    pipe.vae.decode = torch.compile(pipe.vae.decode)
 
     for ind, batch in tqdm(enumerate(iter(dataloader))):
         process_batch(pipe, batch, config,)

@@ -179,7 +179,8 @@ if not USE_CIRCLE:
     Image.open(io.BytesIO(coords_to_klein_out([[5, 7], [32, 123], [32, 111]]))).save('this.png')
 
     pipe.transformer = torch.compile(pipe.transformer)
-    pipe.vae = torch.compile(pipe.vae)
+    pipe.vae.encode = torch.compile(pipe.vae.encode)
+    pipe.vae.decode = torch.compile(pipe.vae.decode)
 
 # Single worker thread: GPU calls run here so they never block the
 # asyncio event loop, and we never run two inference calls at once.

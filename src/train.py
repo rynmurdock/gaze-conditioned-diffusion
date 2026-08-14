@@ -66,7 +66,7 @@ Training {len(trained_params)} torch modules
 
     dataloader, val_dataloader = get_dataloader(config.data_path, config.val_data_split_ratio,
                                                  config.batch_size, config.num_workers, config.seed,
-                                                 config.resolution, )
+                                                 config.resolution, config)
     
     train_losses = []
     inner_train_losses = []

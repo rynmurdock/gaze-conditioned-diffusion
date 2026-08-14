@@ -1,9 +1,13 @@
+'''
+python scripts/eval.py
+'''
 
 import torch
 import sys
 import os
 
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
@@ -64,13 +68,14 @@ def plot_scores(scores, score_types, save_path='scratch/plot.png'):
     plt.close(fig)
     return fig
 
-
-config = Config.from_json('/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/exodromic_Gemaric_Ceratitoidea/config.json')
-
 # strongest baseline prompt
 # config.use_prompt = 'The scene has distintive focal areas'
+os.makedirs('./scratch/', exist_ok=True)
 
-config.lora_path = '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/exodromic_Gemaric_Ceratitoidea/28000_ckpt/pytorch_lora_weights.safetensors'
+path = '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/apostatising_Laennec_Phiona'
+config = Config.from_json(f'{path}/config.json')
+config.lora_path = f'{path}/53000_ckpt/pytorch_lora_weights.safetensors'
+
 model = get_model_and_tokenizer(config.transformer_model_path, config.device, 
                                     config.dtype, config.seed, config.do_compile, config)
 model.pipe.transformer = torch.compile(model.pipe.transformer)
@@ -85,26 +90,28 @@ __train_dataloader, val_dataloader = get_dataloader(config.data_path, config.val
                                                  config.resolution, )
 
 total_scores = 0
-scores = {}
+lpips_scores = {}
+dino_scores = {}
 for data_ind, sample in enumerate(val_dataloader):
-    if data_ind >= 128:
+    if data_ind >= 16:
         break
     total_scores += 1
 
     scanpaths = sample['scanpaths'][0]
     gt_image = sample['pil_images'][0]
-    for ind in [1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2, 2.1, 2.2, 3, 4, 5]:
+    for ind in [1, 2, 3, 4, 5]:
         with torch.autocast('cuda'):
             pred_image = model.inference(guidance_scale=ind, scanpath=scanpaths)
-            dinoscore = 10 * get_dinoscore(pred_image, gt_image)
+            dinoscore = get_dinoscore(pred_image, gt_image)
             lpips = get_lpips(pred_image, gt_image)
         print(f'{ind}: {lpips=}, {dinoscore=}')
 
-        if f'guidance_scale={ind}' in scores:
-            scores[f'guidance_scale={ind}'][0] += lpips
-            scores[f'guidance_scale={ind}'][1] += dinoscore
+        if f'guidance_scale={ind}' in lpips_scores:
+            lpips_scores[f'guidance_scale={ind}'][0] += lpips
+            dino_scores[f'guidance_scale={ind}'][0] += dinoscore
         else:
-            scores[f'guidance_scale={ind}'] = [lpips, dinoscore]
+            lpips_scores[f'guidance_scale={ind}'] = [lpips]
+            dino_scores[f'guidance_scale={ind}'] = [dinoscore]
 
         with_scanpath = scanpath_over_pil_image(scanpaths, pred_image,)
         with_scanpath.save(f'scratch/{ind}_with_scanpath_pred.png')
@@ -114,6 +121,16 @@ for data_ind, sample in enumerate(val_dataloader):
 
 # average our scores
 print(f'{total_scores=}')
-scores = {k: [round(v / total_scores, 2) for v in vals] for k, vals in scores.items()}
-plot_scores(scores, score_types=('lpips', '10×DINOSimilarity'))
+lpips_scores = {k: [round(v / total_scores, 2) for v in vals] for k, vals in lpips_scores.items()}
+dino_scores = {k: [round(v / total_scores, 2) for v in vals] for k, vals in dino_scores.items()}
 
+# setup in such a way that we could add additional score types
+#   but lpips+dino are inverted & different range, so leaving separate rn
+plot_scores(lpips_scores, score_types=['lpips (lower is better)'], save_path='scratch/lpips_plot.png')
+plot_scores(dino_scores, score_types=['DINO Score (higher is better)'], save_path='scratch/dinoscore_plot.png')
+
+
+df = pd.DataFrame({
+    'lpips': lpips_scores,
+    'dinoscore': dino_scores,
+}).to_csv('./scratch/scores.csv')

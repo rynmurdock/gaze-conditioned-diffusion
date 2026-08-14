@@ -325,7 +325,8 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
 
     pipe.vae = pipe.vae.to(device, dtype)
     if do_compile:
-        pipe.vae = torch.compile(pipe.vae)
+        pipe.vae.decode = torch.compile(pipe.vae.decode)
+        pipe.vae.encode = torch.compile(pipe.vae.encode)
     assert not any([p.device != torch.device('cuda:0') for p in pipe.vae.parameters()]), [n for n, p in pipe.vae.named_parameters() if p.device != torch.device('cuda:0')]
 
     pipe.cached_prompt, pipe.cached_txt_ids = None, None

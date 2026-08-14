@@ -95,6 +95,11 @@ hparam sweep:
   [] just to show d-opsd is necessary, ablate with normal flow-matching loss
     - just need example image/similar to demonstrate
 
+[] copy of .py code files of repo into log file at point of launch
+
+[x] delete logs with only images & configs
+[x] finetune on reasonable data
+
 [] given reasonable lr & rank, interesting comparisons are:
   [] just_inf_timesteps (k or t)
     ./logs/kathemoglobin_Bonnette_Douai/ vs just_inf_version_corelates_Salzgitter_Steatornis
@@ -102,7 +107,10 @@ hparam sweep:
     [] try w/ shifting timesteps but only if k is close or less-good
 [] correlation between val loss & reconstruction metrics
 
-
+[] dino + lpips score are thrown off by different types of images
+    - i.e., a well-done product photo on white is nothing like the painting, ofc
+  [] gaze -> image -> gaze/scanpath model compared to GT scanpath
+  [x] train/finetune on a specific type
 
 
 
