@@ -16,20 +16,21 @@ from peft import LoraConfig
 from torchvision.transforms import functional as TF
 
 def ids_encode_pad_mask_images(model, images, dtype):
-    latents = []
-    image_ids = []
-    for pil_img in images:
-        img_tensor = TF.to_tensor(pil_img) * 2 - 1  # (3, H, W), values in [-1, 1]
-        img_tensor = img_tensor.to(model.device, dtype)[None]
-        latent = model.pipe._encode_vae_image(img_tensor, None)
-        imids = Flux2KleinPipeline._prepare_image_ids([latent]).to(latent.device)
-        image_ids.append(imids)
-        latents.append(latent)
-    padded_latents = torch.nn.utils.rnn.pad_sequence(latents, batch_first=True,).squeeze(1)
-    latents_there_mask = torch.nn.utils.rnn.pad_sequence([torch.ones_like(l) for l in latents], 
-                                                         batch_first=True, ).squeeze(1) > 0
-    image_ids = torch.nn.utils.rnn.pad_sequence(image_ids, batch_first=True).squeeze(1)
-    return padded_latents, image_ids, latents_there_mask
+    with torch.autocast(device_type='cuda', enabled=True, dtype=dtype):
+        latents = []
+        image_ids = []
+        for pil_img in images:
+            img_tensor = TF.to_tensor(pil_img) * 2 - 1  # (3, H, W), values in [-1, 1]
+            img_tensor = img_tensor.to(model.device, dtype)[None]
+            latent = model.pipe._encode_vae_image(img_tensor, None)
+            imids = Flux2KleinPipeline._prepare_image_ids([latent]).to(latent.device)
+            image_ids.append(imids)
+            latents.append(latent)
+        padded_latents = torch.nn.utils.rnn.pad_sequence(latents, batch_first=True,).squeeze(1)
+        latents_there_mask = torch.nn.utils.rnn.pad_sequence([torch.ones_like(l) for l in latents], 
+                                                            batch_first=True, ).squeeze(1) > 0
+        image_ids = torch.nn.utils.rnn.pad_sequence(image_ids, batch_first=True).squeeze(1)
+        return padded_latents, image_ids, latents_there_mask
 
 def get_loss(model, images, scanpaths, config, 
              scanpath_sans_contents=None, dtype=None,):
@@ -98,7 +99,7 @@ def get_loss(model, images, scanpaths, config,
             model.pipe.transformer.enable_lora()
 
 
-    with torch.autocast(device_type='cuda', enabled=True, dtype=dtype):
+    with torch.autocast(device_type='cuda', enabled=not config.quantize_model, dtype=dtype):
         if scanpath_as_edit_image:
             latent_model_input = torch.cat([latents, hint_latents], dim=1).to(model.pipe.transformer.dtype)
             latent_image_ids = torch.cat([typical_image_ids, hint_ids], dim=1)
@@ -156,6 +157,10 @@ class Zoo(torch.nn.Module):
     def forward(self, latents, timesteps, image_ids, 
                 prompt_embeds=None, txt_ids=None, latents_attention_mask=None):
         # latents_attention_mask: zeroes where padded & ones where contents of shape [B, S, D]
+        if self.config.quantize_model:
+            latents = latents.to(torch.float16)
+            timesteps = timesteps.to(torch.float16)
+            prompt_embeds = prompt_embeds.to(torch.float16) if prompt_embeds is not None else None
 
         if prompt_embeds is None:
             prompt_embeds = torch.zeros(latents.shape[0], 1, 7680).to(latents.device, latents.dtype)
@@ -259,16 +264,13 @@ def get_prompt_embeds_txt_ids(pipe, prompt, device, dtype=torch.float32):
     p, t_ids = p.to(device, dtype), t_ids.to(device, dtype)
     return p, t_ids
 
-def add_lora(transformer, rank):
+def add_lora(transformer, rank, target_modules):
     transformer_lora_config = LoraConfig(
         r=rank,
         lora_alpha=rank, 
         init_lora_weights="gaussian",
-        target_modules='all-linear'
-        # could train just the attention for image
-        # target_modules=['to_q', 'to_k', 'to_v', 'to_qkv'],
-        # exclude_modules=['add_',]
-    )
+        target_modules=target_modules,
+        )
     transformer.add_adapter(transformer_lora_config)
     print(f"trainable params: {transformer.num_parameters(only_trainable=True)} || all params: {transformer.num_parameters()}")
 
@@ -289,13 +291,13 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
                                                            subfolder=None if path else 'transformer',
                                                            quantization_config=BitsAndBytesConfig(load_in_8bit=True,) if config.quantize_model else None,
                                                            strict=False)
+    target_modules = [
+                "to_q", "to_k", "to_v", "to_out.0",          # double-stream attention
+                "add_q_proj", "add_k_proj", "add_v_proj", "to_add_out",  # double-stream cross/context attention
+                "to_qkv_mlp_proj",                            # single-stream fused qkv+mlp-in
+                "to_out",                                     # single-stream fused attn-out+mlp-out
+            ]
     if config.lora_path:
-        target_modules = [
-            "to_q", "to_k", "to_v", "to_out.0",          # double-stream attention
-            "add_q_proj", "add_k_proj", "add_v_proj", "to_add_out",  # double-stream cross/context attention
-            "to_qkv_mlp_proj",                            # single-stream fused qkv+mlp-in
-            "to_out",                                     # single-stream fused attn-out+mlp-out
-        ]
         transformer.load_lora_adapter(f'{config.lora_path}',
                                       prefix=None,
                                       adapter_name='default',
@@ -306,7 +308,7 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
     elif config.lora_rank:
         # we need a new lora as we aren't loading one
         # inplace operation
-        add_lora(transformer, config.lora_rank)
+        add_lora(transformer, config.lora_rank, target_modules)
 
     if config.batch_size > 1:
         from modeling.klein_batched_rope import batchify_transformer_rope
@@ -359,7 +361,7 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
 
 def get_optimizer_and_lr_sched(params, lr, config):
     if config.quantize_adam:
-        optimizer = bnb.optim.Adam8bit(params, lr=lr)
+        optimizer = bnb.optim.PagedAdamW8bit(params, lr=lr)
     else:
         optimizer = torch.optim.AdamW(params, lr=lr)
     scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, total_iters=1)

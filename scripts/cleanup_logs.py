@@ -7,7 +7,7 @@ import glob, os, shutil
 
 ROOT = "./logs/"
 ALLOWED = {".json", ".png", ".jpeg", '.jpg'}
-DRY_RUN = True
+DRY_RUN = False
 
 dirs = sorted(glob.glob(os.path.join(ROOT, "**/"), recursive=True), key=lambda d: -d.count(os.sep))
 

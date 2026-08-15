@@ -37,7 +37,7 @@ class Config:
 
     ### Hparams
     batch_size: int = 3
-    lr: float = 5e-6 # need to be .70 at step 1000
+    lr: float = 1e-5
     use_prompt: str = 'The scene.'
 
     # teacher gives the input image back in most cases
@@ -60,17 +60,17 @@ class Config:
     activation_checkpointing: bool = True
 
     ### Data
+    included_data_subsets: tuple[str] = ('Art', )
     data_path: str = 'trainSet'
     val_data_split_ratio: int = .1
     num_workers: int = 20
     # width & height side lengths
     resolution: tuple[int, int] = (768, 384)
-    included_data_subsets: tuple[str] = ('Art', )
 
     ### Logging
     exp_name: str = None
     save_path: str = './'
-    freq: int = 500 # how often we save/log/etc.
+    freq: int = 1000 # how often we save/log/etc.
 
     def to_json(self, filename):
         # we don't want to mutate our actual class
@@ -112,6 +112,8 @@ def parse_dtype(config):
 def verify_config_validity(config):
     parse_dtype(config)
 
+    assert not (config.quantize_model and config.lora_rank), (
+            'Saving LoRAs on quantized models is broken, so would need to patch the fn.')
     assert isinstance(config.included_data_subsets, tuple), ('We are parsing a tuple of strings, not a string'
                 '(This warning avoids parsing each character in a subset as its own inclusion string!)')
     assert config.scanpath_as_edit_image, 'We no longer support RoPE for scanpath conditioning'
