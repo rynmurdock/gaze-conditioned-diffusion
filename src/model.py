@@ -294,8 +294,8 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
     target_modules = [
                 "to_q", "to_k", "to_v", "to_out.0",          # double-stream attention
                 "add_q_proj", "add_k_proj", "add_v_proj", "to_add_out",  # double-stream cross/context attention
-                "to_qkv_mlp_proj",                            # single-stream fused qkv+mlp-in
-                "to_out",                                     # single-stream fused attn-out+mlp-out
+                "to_qkv_mlp_proj.0",                            # single-stream fused qkv+mlp-in
+                "to_out.0",                                     # single-stream fused attn-out+mlp-out
             ]
     if config.lora_path:
         transformer.load_lora_adapter(f'{config.lora_path}',

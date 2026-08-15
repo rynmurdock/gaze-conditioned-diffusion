@@ -13,7 +13,7 @@ from train import main
 
 sweep_grid = {
     "lr": [1e-5],
-    'lora_path': [None],
+#    'lora_path': [None],
     "lora_rank": [128],
     "max_steps": [10_000],
     'batch_size': [2],
