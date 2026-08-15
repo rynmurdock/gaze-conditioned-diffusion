@@ -37,7 +37,7 @@ class Config:
 
     ### Hparams
     batch_size: int = 3
-    lr: float = 4e-5
+    lr: float = 5e-6 # need to be .70 at step 1000
     use_prompt: str = 'The scene.'
 
     # teacher gives the input image back in most cases
@@ -70,7 +70,7 @@ class Config:
     ### Logging
     exp_name: str = None
     save_path: str = './'
-    freq: int = 1000 # how often we save/log/etc.
+    freq: int = 500 # how often we save/log/etc.
 
     def to_json(self, filename):
         # we don't want to mutate our actual class

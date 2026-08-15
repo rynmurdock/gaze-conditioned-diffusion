@@ -90,6 +90,10 @@ hparam sweep:
 [x] compare teacher model sampling typical trajectory & with gt answer given
 [x] timestep shift by resolution
 
+[] tally timestep increment within config for logging
+  [] and for dataloader state?
+
+
 [] starting writeup
 [x] eval over checkpoints using lpips/clip/dinoscore
   [] just to show d-opsd is necessary, ablate with normal flow-matching loss

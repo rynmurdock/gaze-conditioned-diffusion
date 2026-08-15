@@ -132,7 +132,7 @@ class ScanpathDataset(Dataset):
             if (included_data_subsets and 
                 not any([image_type in img_path for image_type in included_data_subsets])):
                 # skip use some subsets of data by subfolder topic
-                logging.warning(f'Skipping {img_path} as it is not an included image type')
+                logging.warning(f'Skipping {img_path} as it is not included for {included_data_subsets}')
                 continue
 
             for rec in _iter_records(all_data[key]):
