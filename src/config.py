@@ -63,7 +63,7 @@ class Config:
     included_data_subsets: tuple[str] = ('Art', )
     data_path: str = 'trainSet'
     val_data_split_ratio: int = .1
-    num_workers: int = 20
+    num_workers: int = 64
     # width & height side lengths
     resolution: tuple[int, int] = (768, 384)
 

@@ -284,7 +284,7 @@ def get_dataloader(
     )
 
     train_loader = DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
-                        shuffle=True, collate_fn=collate_scanpaths)
+                        shuffle=True, collate_fn=collate_scanpaths, prefetch_factor=4)
     val_loader = DataLoader(val_data, batch_size=1, num_workers=num_workers,
                         shuffle=False, collate_fn=collate_scanpaths)
     
