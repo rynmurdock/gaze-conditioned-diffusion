@@ -13,6 +13,7 @@ peft
 imageio
 apscheduler
 av
+bitsandbytes
 mat-io
 websockets>=12.0
 torchmetrics
