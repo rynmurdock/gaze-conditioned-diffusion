@@ -9,10 +9,13 @@ from config import Config
 from train import main
 
 sweep_grid = {
-    "lr": [4e-5],
+    "lr": [1e-5],
     "lora_rank": [128],
     "max_steps": [10_000],
+    'batch_size': [2],
+    'activation_checkpointing': [False],
     'use_prompt': ['The scene.'],
+    'teacher_use_prompt': ['', 'Regenerate the image just as it was given.'],
     'just_inf_timesteps': [True, False],
 }
 
