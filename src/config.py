@@ -60,7 +60,7 @@ class Config:
     activation_checkpointing: bool = True
 
     ### Data
-    included_data_subsets: tuple[str] = ('OutdoorNatural', )
+    included_data_subsets: tuple[str] = ('Art', )
     data_path: str = 'trainSet'
     val_data_split_ratio: int = .1
     num_workers: int = 64
