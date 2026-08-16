@@ -15,7 +15,7 @@ sweep_grid = {
     "lr": [1e-4],
 #    'lora_path': [None],
     "lora_rank": [128],
-    "max_steps": [1_000],
+    "max_steps": [1_010],
     'batch_size': [32],
     'activation_checkpointing': [True],
     'use_prompt': ['The scene.'],
