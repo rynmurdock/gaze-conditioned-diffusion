@@ -29,16 +29,16 @@ class Config:
     just_inf_timesteps: bool = False
     # just_inf_timesteps will automatically already shift, 
     #   so this does nothing if just_inf_timesteps=False
-    shift_timesteps_resolution: bool = False
+    shift_timesteps_resolution: bool = True
     ####
 
     quantize_adam: bool = False
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 3
-    lr: float = 1e-5
-    use_prompt: str = 'The scene.'
+    batch_size: int = 32
+    lr: float = 1e-4
+    use_prompt: str = 'Regenerate the image just as it was given.'
 
     # teacher gives the input image back in most cases
     #   sans instruction
