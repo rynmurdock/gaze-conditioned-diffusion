@@ -38,11 +38,11 @@ class Config:
     ### Hparams
     batch_size: int = 32
     lr: float = 1e-4
-    use_prompt: str = 'Regenerate the image just as it was given.'
+    use_prompt: str = 'The scene.'
 
     # teacher gives the input image back in most cases
     #   sans instruction
-    teacher_use_prompt: str = ''
+    teacher_use_prompt: str = 'Regenerate the image just as it was given.'
 
     ### Training
     epochs: int = 3000000000000
