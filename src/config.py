@@ -14,7 +14,7 @@ class Config:
     ### Model
     # model_path = None
     transformer_model_path = None
-    lora_path = None # '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/apostatising_Laennec_Phiona/53000_ckpt/pytorch_lora_weights.safetensors'
+    lora_path = 'logs/wyling_Hippo_Tyzine/4000_ckpt/pytorch_lora_weights.safetensors' # '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/apostatising_Laennec_Phiona/53000_ckpt/pytorch_lora_weights.safetensors'
 
     seed: int = 13
 
