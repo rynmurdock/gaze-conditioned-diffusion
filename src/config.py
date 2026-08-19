@@ -63,6 +63,10 @@ class Config:
 
     ### Data
     included_data_subsets: tuple[str] = ('Art', )
+    # we use this for excluding specific samples in "Art" here
+    #   be aware that other subsets may use these filenames!
+    excluded_data_subsets: tuple[str] = ('035.jpg', '079.jpg', '111.jpg', '115.jpg')
+
     data_path: str = 'trainSet'
     val_data_split_ratio: int = .1
     num_workers: int = 20

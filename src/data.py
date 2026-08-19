@@ -102,6 +102,7 @@ class ScanpathDataset(Dataset):
 
     def __init__(self, root, mat_path, stim_size=(512, 512), 
                  included_data_subsets=None,
+                 excluded_data_subsets=None,
                  coord_order="xy",
                  ):
         """
@@ -134,6 +135,13 @@ class ScanpathDataset(Dataset):
                 # skip use some subsets of data by subfolder topic
                 logging.info(f'Skipping {img_path} as it is not included for {included_data_subsets}')
                 continue
+
+            if (excluded_data_subsets and 
+                            any([image_type in img_path for image_type in excluded_data_subsets])):
+                            # skip use some subsets of data by subfolder topic
+                            logging.info(f'Skipping {img_path} as it is excluded for containing {excluded_data_subsets}')
+                            continue
+            
 
             for rec in _iter_records(all_data[key]):
                 subj_name = _scalar_str(rec["name"])
@@ -270,7 +278,8 @@ def get_dataloader(
         root=data_path,
         mat_path=f"{data_path}/allFixData.mat",
         stim_size=resolution,
-        included_data_subsets=config.included_data_subsets
+        included_data_subsets=config.included_data_subsets,
+        excluded_data_subsets=config.excluded_data_subsets
     )
 
     assert val_data_split_ratio < 1 and val_data_split_ratio > 0
@@ -292,16 +301,23 @@ def get_dataloader(
 
 if __name__ == "__main__":
     # root should contain a `Stimuli/` subfolder (e.g. Stimuli/Action/001.jpg)
-    dataset = ScanpathDataset(
-        root="trainSet",
-        mat_path="trainSet/allFixData.mat",
-        stim_size=(768, 384),
-    )
-    loader = DataLoader(dataset, batch_size=8, shuffle=True, collate_fn=collate_scanpaths)
+    # dataset = ScanpathDataset(
+    #     root="trainSet",
+    #     mat_path="trainSet/allFixData.mat",
+    #     stim_size=(768, 384),
+    # )
+    # loader = DataLoader(dataset, batch_size=8, shuffle=True, collate_fn=collate_scanpaths)
 
-    batch = next(iter(loader))
-    logging.info("scanpaths:", batch["scanpaths"].shape)   # (8, T_max, 2 or 3)
-    logging.info("scanpaths:", batch["scanpaths"][0])   # (Ex. first in batch)
-    logging.info("lengths:  ", batch["lengths"])
-    logging.info("stimuli:  ", batch["stim_names"])
+    from config import main_config
+    config = main_config
+    dataloader, val_dataloader = get_dataloader(config.data_path, config.val_data_split_ratio,
+                                                     config.batch_size, config.num_workers, config.seed,
+                                                     config.resolution, config)
+
+
+    batch = next(iter(dataloader))
+    logging.info("scanpaths:" + str(batch["scanpaths"].shape))   # (8, T_max, 2 or 3)
+    logging.info("scanpaths:" + str(batch["scanpaths"][0]))   # (Ex. first in batch)
+    logging.info("lengths:  " + str(batch["lengths"]))
+    logging.info("stimuli:  " + str(batch["stim_names"]))
 

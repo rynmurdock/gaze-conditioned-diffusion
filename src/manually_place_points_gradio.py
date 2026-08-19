@@ -1,7 +1,11 @@
 '''
 Manually place gaze points
-python src/gradio.py
+python src/manually_place_points_gradio.py
 '''
+
+import torch
+from model import get_model_and_tokenizer
+from config import Config
 
 import gradio as gr
 import numpy as np
@@ -13,8 +17,9 @@ logging.basicConfig(level=logging.INFO)
 
 def call_model(points: list[list[int]]) -> Image.Image:
     points = np.array(points)
+    print(points)
     with torch.autocast('cuda'):
-        image = model.inference(scanpath=points)
+        image = model.inference(scanpath=points, guidance_scale=1.2)
     return image
 
 
@@ -34,7 +39,7 @@ def add_point(base_image, points, evt: gr.SelectData):
 
 
 def on_upload(image):
-    return image, [], image
+    return image.resize((768, 384)), [], image.resize((768, 384))
 
 
 def submit(points):
@@ -62,12 +67,11 @@ with gr.Blocks() as demo:
     submit_btn.click(submit, inputs=points, outputs=[img, base_image, points])
     clear_btn.click(reset, inputs=base_image, outputs=[img, points])
 
-import torch
-from model import get_model_and_tokenizer
-from config import main_config
 
 
-config = main_config
+path = '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/apostatising_Laennec_Phiona/'
+config = Config.from_json(f'{path}/config.json')
+config.lora_path = '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/apostatising_Laennec_Phiona/27000_ckpt/pytorch_lora_weights.safetensors'
 model = get_model_and_tokenizer(config.transformer_model_path, config.device, 
                                     config.dtype, config.seed, config.do_compile, config)
 model.config.log_dir = './'

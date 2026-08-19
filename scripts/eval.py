@@ -157,21 +157,21 @@ def run_eval(
     
     return min_lpips, max_dino
 
-to_eval = [
-    ('/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=False/', '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=False/1000_ckpt/pytorch_lora_weights.safetensors'),
-    ('/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=True/', '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=True/1000_ckpt/pytorch_lora_weights.safetensors'),
-    ('/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=Regenerate the image just as it was given._just_inf_timesteps=False/', '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=Regenerate the image just as it was given._just_inf_timesteps=False/1000_ckpt/pytorch_lora_weights.safetensors'),
-    ('/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=Regenerate the image just as it was given._just_inf_timesteps=True/', '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=Regenerate the image just as it was given._just_inf_timesteps=True/1000_ckpt/pytorch_lora_weights.safetensors'),
-]
+to_eval = '''/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/lr=1e-05_lora_rank=128_max_steps=10000_use_prompt=_just_inf_timesteps=False_shift_timesteps_resolution=True
+/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/lr=1e-05_lora_rank=128_max_steps=10000_use_prompt=_just_inf_timesteps=True_shift_timesteps_resolution=True
+/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/lr=1e-05_lora_rank=128_max_steps=10000_use_prompt=The scene._just_inf_timesteps=False_shift_timesteps_resolution=True
+/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/lr=1e-05_lora_rank=128_max_steps=10000_use_prompt=The scene._just_inf_timesteps=True_shift_timesteps_resolution=True'''.splitlines()
+
 
 ckpts_to_scores = {}
 for e in to_eval:
-    job_path, ckpt_step_path = e
-    min_lpips, max_dino = run_eval(job_path, ckpt_step_path)
-    ckpts_to_scores[ckpt_step_path] = {
-                            'min_lpips': min_lpips,
-                            'max_dino': max_dino
-                            }
+    for step in np.linspace(1000, 10000, 10):
+        job_path, ckpt_step_path = e, f'{e}/{int(step)}_ckpt/pytorch_lora_weights.safetensors'
+        min_lpips, max_dino = run_eval(job_path, ckpt_step_path)
+        ckpts_to_scores[ckpt_step_path] = {
+                                'min_lpips': min_lpips,
+                                'max_dino': max_dino
+                                }
     
     df = pd.DataFrame(ckpts_to_scores)
     df.to_csv(f'{job_path}_scores.csv')
