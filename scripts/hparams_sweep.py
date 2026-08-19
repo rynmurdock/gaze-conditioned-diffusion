@@ -36,8 +36,8 @@ for cfg in to_sweep:
     cfg.exp_name = "_".join([f"{n}={getattr(cfg, n)}" for n in sweep_grid.keys()])
     try:
         main(cfg)
-    except:
-        logging.warning(f'{cfg.exp_name} failed.')
+    except Exception as e:
+        logging.warning(f'{cfg.exp_name} failed with {e}.')
 
 
 # ./logs/nonfuturity_Danice_Efland/: sample_teacher=False; 
