@@ -21,7 +21,7 @@ sweep_grid = {
     'use_prompt': ['The scene.'],
     'teacher_use_prompt': ['',],
     'just_inf_timesteps': [True,],
-    'included_data_subsets': ('OutdoorNatural', ),
+    'included_data_subsets': tuple('OutdoorNatural', ),
     'shift_timesteps_resolution': [True],
 }
 
