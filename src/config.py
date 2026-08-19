@@ -31,7 +31,7 @@ class Config:
     just_inf_timesteps: bool = False
     # just_inf_timesteps will automatically already shift, 
     #   so this does nothing if just_inf_timesteps=False
-    shift_timesteps_resolution: bool = True
+    shift_timesteps_resolution: bool = False
     ####
 
     quantize_adam: bool = False
@@ -44,7 +44,7 @@ class Config:
 
     # teacher gives the input image back in most cases
     #   sans instruction
-    teacher_use_prompt: str = 'Regenerate the image just as it was given.'
+    teacher_use_prompt: str = ''
 
     ### Training
     epochs: int = 3000000000000
@@ -76,7 +76,7 @@ class Config:
     ### Logging
     exp_name: str = None
     save_path: str = './'
-    freq: int = 1000 # how often we save/log/etc.
+    freq: int = 500 # how often we save/log/etc.
 
     def to_json(self, filename):
         # we don't want to mutate our actual class
