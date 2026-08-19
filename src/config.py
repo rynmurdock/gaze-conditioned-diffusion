@@ -5,7 +5,7 @@ import json
 import inspect
 import torch
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, fields
 from copy import deepcopy
 
 
@@ -98,13 +98,11 @@ class Config:
             data = json.load(file)
 
             # Filter kwargs to only include valid parameters
-            sig = inspect.signature(super().__init__)
-            valid_keys = sig.parameters.keys()            
+            valid_keys = [field.name for field in fields(cls)]
             valid_kwargs = {k: v for k, v in data.items() if k in valid_keys}
             nonviable_kwargs = {k: v for k, v in data.items() if not k in valid_keys}
-            logging.warning(
+            if len(nonviable_kwargs) > 0: logging.warning(
                 f"{nonviable_kwargs} are not used in our config, so we're dropping them!")
-
             config = cls(**valid_kwargs)
         config = parse_dtype(config)
         return config

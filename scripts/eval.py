@@ -157,15 +157,16 @@ def run_eval(
     
     return min_lpips, max_dino
 
-to_eval = '''/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/lr=1e-05_lora_rank=128_max_steps=10000_use_prompt=_just_inf_timesteps=False_shift_timesteps_resolution=True
-/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/lr=1e-05_lora_rank=128_max_steps=10000_use_prompt=_just_inf_timesteps=True_shift_timesteps_resolution=True
-/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/lr=1e-05_lora_rank=128_max_steps=10000_use_prompt=The scene._just_inf_timesteps=False_shift_timesteps_resolution=True
-/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/lr=1e-05_lora_rank=128_max_steps=10000_use_prompt=The scene._just_inf_timesteps=True_shift_timesteps_resolution=True'''.splitlines()
+to_eval = '''/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=False
+/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=True
+/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=True_included_data_subsets=('OutdoorNatural',)_shift_timesteps_resolution=True
+/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=Regenerate the image just as it was given._just_inf_timesteps=False
+/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=Regenerate the image just as it was given._just_inf_timesteps=True'''.splitlines()
 
 
 ckpts_to_scores = {}
 for e in to_eval:
-    for step in np.linspace(1000, 10000, 10):
+    for step in [1000]:
         job_path, ckpt_step_path = e, f'{e}/{int(step)}_ckpt/pytorch_lora_weights.safetensors'
         min_lpips, max_dino = run_eval(job_path, ckpt_step_path)
         ckpts_to_scores[ckpt_step_path] = {
