@@ -1,10 +1,12 @@
-from dataclasses import dataclass, field, asdict
-from copy import deepcopy
 import logging
 logging.basicConfig(level=logging.INFO)
 import os
 import json
+import inspect
 import torch
+
+from dataclasses import dataclass, field, asdict
+from copy import deepcopy
 
 
 @dataclass
@@ -90,7 +92,16 @@ class Config:
 
         with open(filename, "r") as file:
             data = json.load(file)
-            config = cls(**data)
+
+            # Filter kwargs to only include valid parameters
+            sig = inspect.signature(super().__init__)
+            valid_keys = sig.parameters.keys()            
+            valid_kwargs = {k: v for k, v in data.items() if k in valid_keys}
+            nonviable_kwargs = {k: v for k, v in data.items() if not k in valid_keys}
+            logging.warning(
+                f"{nonviable_kwargs} are not used in our config, so we're dropping them!")
+
+            config = cls(**valid_kwargs)
         config = parse_dtype(config)
         return config
 

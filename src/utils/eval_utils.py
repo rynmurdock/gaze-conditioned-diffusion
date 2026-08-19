@@ -55,6 +55,6 @@ def get_dinoscore(im1: Image.Image, im2: Image.Image):
         outputs = dino(inputs)
 
     last_hidden_states = outputs.last_hidden_state # ViT backbone features
-    emb_img1, emb_img2 = last_hidden_states[0, 0], last_hidden_states[1, 0] # Get cls token (0-th token) for each img
+    emb_img1, emb_img2 = last_hidden_states[0].mean(0), last_hidden_states[1].mean(0) # Average pooling
     metric = F.cosine_similarity(emb_img1, emb_img2, dim=0).item()
     return metric

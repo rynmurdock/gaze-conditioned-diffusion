@@ -19,8 +19,10 @@ sweep_grid = {
     'batch_size': [32],
     'activation_checkpointing': [True],
     'use_prompt': ['The scene.'],
-    'teacher_use_prompt': ['', 'Regenerate the image just as it was given.'],
-    'just_inf_timesteps': [True, False],
+    'teacher_use_prompt': ['',],
+    'just_inf_timesteps': [True,],
+    'included_data_subsets': ('OutdoorNatural', ),
+    'shift_timesteps_resolution': [True],
 }
 
 def grid_configs(grid: dict):

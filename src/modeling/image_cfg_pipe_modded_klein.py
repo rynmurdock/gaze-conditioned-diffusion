@@ -38,6 +38,27 @@ if is_torch_xla_available():
 else:
     XLA_AVAILABLE = False
 
+def calculate_shift(
+    image_seq_len,
+    base_seq_len: int = 256,
+    max_seq_len: int = 4096,
+    base_shift: float = 0.5,
+    max_shift: float = 1.15,
+):
+    m = (max_shift - base_shift) / (max_seq_len - base_seq_len)
+    b = base_shift - m * base_seq_len
+    mu = image_seq_len * m + b
+    return mu
+
+# mu = calculate_shift(
+#             image_seq_len,
+#             self.scheduler.config.get("base_image_seq_len", 256),
+#             self.scheduler.config.get("max_image_seq_len", 4096),
+#             self.scheduler.config.get("base_shift", 0.5),
+#             self.scheduler.config.get("max_shift", 1.15),
+#         )
+
+
 # Copied from diffusers.pipelines.flux2.pipeline_flux2.compute_empirical_mu
 def compute_empirical_mu(image_seq_len: int, num_steps: int) -> float:
     a1, b1 = 8.73809524e-05, 1.89833333

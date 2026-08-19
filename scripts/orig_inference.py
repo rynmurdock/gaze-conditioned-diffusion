@@ -1,5 +1,6 @@
 '''
 Inference over a typical klein model with visualization of x0 prediction
+python scripts/orig_inference.py
 '''
 
 import torch
@@ -32,3 +33,35 @@ image = pipe(
     callback_on_step_end_tensor_inputs=["latents", 'height', 'width', "prompt_embeds", "noise_pred", 'latent_ids', 'height', 'width'],
 ).images[0]
 image.save('0.png')
+
+
+# import matplotlib.pyplot as plt
+# seq_len = 768//16 * 384//16
+
+# # Copied from diffusers.pipelines.flux2.pipeline_flux2.compute_empirical_mu
+# def compute_empirical_mu(image_seq_len: int, num_steps: int) -> float:
+#     a1, b1 = 8.73809524e-05, 1.89833333
+#     a2, b2 = 0.00016927, 0.45666666
+
+#     if image_seq_len > 4300:
+#         mu = a2 * image_seq_len + b2
+#         return float(mu)
+
+#     m_200 = a2 * image_seq_len + b2
+#     m_10 = a1 * image_seq_len + b1
+
+#     a = (m_200 - m_10) / 190.0
+#     b = m_200 - 200.0 * a
+#     mu = a * num_steps + b
+
+#     return float(mu)
+
+
+# import math
+# import numpy as np
+# mu = compute_empirical_mu(seq_len, num_steps=4)
+# u = np.linspace(0, 1, 1000)
+# u = math.exp(mu) / (math.exp(mu) + (1 / u - 1) ** 1)
+# fig = plt.figure()
+# f = plt.plot(u)
+# fig.savefig('l.png')
