@@ -94,41 +94,34 @@ def run_eval(
     total_scores = 0
     lpips_scores = {}
     dino_scores = {}
-    for data_ind, sample in enumerate(val_dataloader):
-        if data_ind >= n_samples:
-            break
-        total_scores += 1
+    while total_scores < n_samples:
+        print(f'Initializing our dataloader!')
+        for sample in enumerate(val_dataloader):
+            if total_scores >= n_samples:
+                break
+            total_scores += 1
 
-        scanpaths = sample['scanpaths'][0]
-        gt_image = sample['pil_images'][0]
-        for ind in [1, 1.1, 1.2, 3,]:
-            with torch.autocast('cuda'):
-                pred_image = model.inference(guidance_scale=ind, scanpath=scanpaths)
-                dinoscore = get_dinoscore(pred_image, gt_image)
-                lpips = get_lpips(pred_image, gt_image)
-            print(f'{ind}: {lpips=}, {dinoscore=}')
+            scanpaths = sample['scanpaths'][0]
+            gt_image = sample['pil_images'][0]
+            for ind in [1, 1.1, 1.2, 3,]:
+                with torch.autocast('cuda'):
+                    pred_image = model.inference(guidance_scale=ind, scanpath=scanpaths)
+                    dinoscore = get_dinoscore(pred_image, gt_image)
+                    lpips = get_lpips(pred_image, gt_image)
+                print(f'{ind}: {lpips=}, {dinoscore=}')
 
-            if f'guidance_scale={ind}' in lpips_scores:
-                lpips_scores[f'guidance_scale={ind}'][0] += lpips
-                dino_scores[f'guidance_scale={ind}'][0] += dinoscore
-            else:
-                lpips_scores[f'guidance_scale={ind}'] = [lpips]
-                dino_scores[f'guidance_scale={ind}'] = [dinoscore]
+                if f'guidance_scale={ind}' in lpips_scores:
+                    lpips_scores[f'guidance_scale={ind}'][0] += lpips
+                    dino_scores[f'guidance_scale={ind}'][0] += dinoscore
+                else:
+                    lpips_scores[f'guidance_scale={ind}'] = [lpips]
+                    dino_scores[f'guidance_scale={ind}'] = [dinoscore]
 
-            with_scanpath = scanpath_over_pil_image(scanpaths, pred_image,)
-            with_scanpath.save(f'scratch/{ind}_with_scanpath_pred.png')
-            
-            pred_image.save(f'scratch/{ind}_pred.png')
-            gt_image.save(f'scratch/{ind}_gt.png')
-
-        # if we're at the last index of the data, restart the dataloader
-        #   we still get random noise
-        if data_ind == len(val_dataloader)-1:
-            print(f'Restarting our dataloader!')
-            _, val_dataloader = get_dataloader(config.data_path, config.val_data_split_ratio,
-                                                                config.batch_size, 
-                                                                config.num_workers, config.seed,
-                                                                config.resolution, config)
+                with_scanpath = scanpath_over_pil_image(scanpaths, pred_image,)
+                with_scanpath.save(f'scratch/{ind}_with_scanpath_pred.png')
+                
+                pred_image.save(f'scratch/{ind}_pred.png')
+                gt_image.save(f'scratch/{ind}_gt.png')
 
     # average our scores
     # print(f'{total_scores=}')
