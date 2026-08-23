@@ -61,53 +61,6 @@ def build_stub_transformer(seed: int = 0) -> Flux2Transformer2DModel:
     print(f"Stub Flux2Transformer2DModel built: {n_params:,} params")
     return model
 
-def test_batched_rope():
-    transformer = build_stub_transformer().to('cpu', torch.bfloat16)
-
-    torch.manual_seed(7)
-    latents = torch.randn((1, 16, 16,), device='cpu', dtype=torch.bfloat16)
-    timesteps = torch.randint(0, 1000, (1,)).to(latents.device, latents.dtype)
-    p_embs = torch.randn((1, 4, 4)).to(latents.device, latents.dtype)
-    txt_ids = torch.randint(0, 100, (4, 4)).to(latents.device, latents.dtype)
-    img_ids = torch.randint(0, 100, (16, 4)).to(latents.device, latents.dtype)
-
-    batch_size_1_out = transformer(
-        hidden_states=latents,  # (B, image_seq_len, C)
-        timestep=timesteps / 1000,
-        guidance=None,
-        encoder_hidden_states=p_embs,
-        txt_ids=txt_ids,
-        img_ids=img_ids,
-        return_dict=False,
-    )[0]
-
-    from modeling.klein_batched_rope import batchify_transformer_rope
-    transformer = batchify_transformer_rope(transformer)
-
-    two_latents = torch.randn((2, 16, 16,), device='cpu', dtype=torch.bfloat16)
-    two_timesteps = torch.randint(0, 1000, (2,)).to(latents.device, latents.dtype)
-    two_p_embs = torch.randn((2, 4, 4)).to(latents.device, latents.dtype)
-    two_txt_ids = torch.randint(0, 100, (2, 4, 4)).to(latents.device, latents.dtype)
-    two_img_ids = torch.randint(0, 100, (2, 16, 4)).to(latents.device, latents.dtype)
-
-    latents = torch.cat([latents, two_latents])
-    timesteps = torch.cat([timesteps, two_timesteps])
-    p_embs = torch.cat([p_embs, two_p_embs])
-    txt_ids = torch.cat([txt_ids[None], two_txt_ids])
-    img_ids = torch.cat([img_ids[None], two_img_ids])
-
-    batch_size_3_out = transformer(
-            hidden_states=latents,  # (B, image_seq_len, C)
-            timestep=timesteps / 1000,
-            guidance=None,
-            encoder_hidden_states=p_embs,
-            txt_ids=txt_ids,
-            img_ids=img_ids,  # B, image_seq_len, 4
-            return_dict=False,
-        )[0]
-
-    assert torch.equal(batch_size_1_out, batch_size_3_out[:1])
-
 def test_attention_mask_and_batched_rope():
     transformer = build_stub_transformer().to('cpu', torch.bfloat16)
     
@@ -148,7 +101,6 @@ def test_attention_mask_and_batched_rope():
     txt_ids = torch.cat([txt_ids[None], two_txt_ids])
     img_ids = torch.nn.utils.rnn.pad_sequence([img_ids, two_img_ids[0]], 
                                                     batch_first=True,).squeeze(1)
-    # TODO more e2e test
 
     attn_mask = latents_there_mask.sum(-1)
     attn_mask = torch.nn.functional.pad(attn_mask, (4, 0,), value=1) != 0.
@@ -196,5 +148,13 @@ def test_dinoscore():
                     f'Metric is {abs(metric - 0.770)} away from known good')
 
 # test_dinoscore()
-# test_batched_rope()
+
 test_attention_mask_and_batched_rope()
+
+print('''\n\n
+***********************************
+Our tests passed
+***********************************
+''')
+
+

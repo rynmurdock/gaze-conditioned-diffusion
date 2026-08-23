@@ -2,7 +2,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 import os
 import json
-import inspect
 import torch
 
 from dataclasses import dataclass, field, asdict, fields
@@ -14,8 +13,7 @@ class Config:
     ### Model
     # model_path = None
     transformer_model_path = None
-    lora_path = 'logs/wyling_Hippo_Tyzine/4000_ckpt/pytorch_lora_weights.safetensors' # '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/apostatising_Laennec_Phiona/53000_ckpt/pytorch_lora_weights.safetensors'
-
+    lora_path = None # '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/apostatising_Laennec_Phiona/53000_ckpt/pytorch_lora_weights.safetensors'
     seed: int = 13
 
     #### seems consistently better to keep text encoder; use edit image
@@ -27,24 +25,23 @@ class Config:
     lora_rank: int = 128
     sample_teacher: bool = True
 
-    #### seems consistently better to do all t
     just_inf_timesteps: bool = False
     # just_inf_timesteps will automatically already shift, 
     #   so this does nothing if just_inf_timesteps=False
-    shift_timesteps_resolution: bool = False
+    shift_timesteps_resolution: bool = True
     ####
 
     quantize_adam: bool = False
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 32
-    lr: float = 1e-4
+    batch_size: int = 3
+    lr: float = 5e-6
     use_prompt: str = 'The scene.'
 
     # teacher gives the input image back in most cases
     #   sans instruction
-    teacher_use_prompt: str = ''
+    teacher_use_prompt: str = 'Regenerate the image just as it was given.'
 
     ### Training
     epochs: int = 3000000000000

@@ -43,7 +43,6 @@ T = transforms.Compose([
 # Load DINO ViT-S/16
 dino = ViTModel.from_pretrained('facebook/dino-vits16')
 
-
 def get_dinoscore(im1: Image.Image, im2: Image.Image):
     imgs = [im1, im2]
     # https://github.com/google/dreambooth/issues/3 (from dreambooth repo)

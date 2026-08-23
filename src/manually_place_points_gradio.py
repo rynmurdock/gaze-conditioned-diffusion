@@ -19,7 +19,7 @@ def call_model(points: list[list[int]]) -> Image.Image:
     points = np.array(points)
     print(points)
     with torch.autocast('cuda'):
-        image = model.inference(scanpath=points, guidance_scale=1.2)
+        image = model.inference(scanpath=points, guidance_scale=1.)
     return image
 
 
@@ -69,9 +69,9 @@ with gr.Blocks() as demo:
 
 
 
-path = '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/apostatising_Laennec_Phiona/'
+path = '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/ascendants_Monograptus_Tyzine/'
 config = Config.from_json(f'{path}/config.json')
-config.lora_path = '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/apostatising_Laennec_Phiona/27000_ckpt/pytorch_lora_weights.safetensors'
+config.lora_path = '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/ascendants_Monograptus_Tyzine/1500_ckpt/pytorch_lora_weights.safetensors'
 model = get_model_and_tokenizer(config.transformer_model_path, config.device, 
                                     config.dtype, config.seed, config.do_compile, config)
 model.config.log_dir = './'

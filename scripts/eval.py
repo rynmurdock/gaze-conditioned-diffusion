@@ -3,12 +3,15 @@ PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True python scripts/eval.py
 '''
 
 import torch
+import shutil
 import sys
 import os
 import gc
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
+from clip_mmd import logic
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
@@ -71,6 +74,8 @@ def run_eval(
         path='/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/provincialization_Demopolis_Phiona/',
         lora_path=f'/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/provincialization_Demopolis_Phiona/66000_ckpt/pytorch_lora_weights.safetensors',
         n_samples=32,
+        guidance_scales=[1, 1.1, 1.2, 3,],
+        step=None,
     ):
     config = Config.from_json(f'{path}/config.json')
     config.lora_path = lora_path
@@ -80,8 +85,6 @@ def run_eval(
 
     model = get_model_and_tokenizer(config.transformer_model_path, config.device, 
                                         config.dtype, config.seed, config.do_compile, config)
-    model.pipe.transformer = torch.compile(model.pipe.transformer)
-    model.pipe.vae = torch.compile(model.pipe.vae)
     model.config.log_dir = './'
 
 
@@ -96,18 +99,30 @@ def run_eval(
     dino_scores = {}
     while total_scores < n_samples:
         print(f'Initializing our dataloader!')
-        for sample in val_dataloader:
+        for sample in tqdm(val_dataloader):
             if total_scores >= n_samples:
                 break
             total_scores += 1
 
             scanpaths = sample['scanpaths'][0]
             gt_image = sample['pil_images'][0]
-            for ind in [1, 1.1, 1.2, 3,]:
+            for ind in guidance_scales:
+                # saving into cmmd so I can use their existing structure of loading from disk
+                pred_this_cmmd_dir = f'pred_scratch_cmmd_{ind}_{step}/'
+                gt_this_cmmd_dir = f'gt_scratch_cmmd_{ind}_{step}/'
+                os.makedirs(pred_this_cmmd_dir, exist_ok=True)
+                os.makedirs(gt_this_cmmd_dir, exist_ok=True)
+
                 with torch.autocast('cuda'):
-                    pred_image = model.inference(guidance_scale=ind, scanpath=scanpaths)
+                    pred_image = model.inference(guidance_scale=ind, 
+                                                 scanpath=scanpaths,
+                                                 width_height=(gt_image.width, gt_image.height)
+                                                 )
                     dinoscore = get_dinoscore(pred_image, gt_image)
                     lpips = get_lpips(pred_image, gt_image)
+                    pred_image.save(f'{pred_this_cmmd_dir}/{total_scores}.png')
+                    gt_image.save(f'{gt_this_cmmd_dir}/{total_scores}.png')
+
                 print(f'{ind}: {lpips=}, {dinoscore=}')
 
                 if f'guidance_scale={ind}' in lpips_scores:
@@ -119,28 +134,37 @@ def run_eval(
 
                 with_scanpath = scanpath_over_pil_image(scanpaths, pred_image,)
                 with_scanpath.save(f'scratch/{ind}_with_scanpath_pred.png')
-                
-                pred_image.save(f'scratch/{ind}_pred.png')
-                gt_image.save(f'scratch/{ind}_gt.png')
 
-    # average our scores
-    # print(f'{total_scores=}')
+    cmmd_scores = {}
+    for ind in guidance_scales:
+        pred_this_cmmd_dir = f'pred_scratch_cmmd_{ind}_{step}/'
+        gt_this_cmmd_dir = f'gt_scratch_cmmd_{ind}_{step}/'
+
+        metric = logic.CMMD(data_parallel=True, device_ids=[0])
+        score_cmmd = metric.execute(pred_this_cmmd_dir, gt_this_cmmd_dir)
+        cmmd_scores[f'guidance_scale={ind}'] = [score_cmmd]
+        shutil.rmtree(pred_this_cmmd_dir)
+        shutil.rmtree(gt_this_cmmd_dir)
+
     lpips_scores = {k: [v / total_scores for v in vals] for k, vals in lpips_scores.items()}
     dino_scores = {k: [v / total_scores for v in vals] for k, vals in dino_scores.items()}
 
     # setup in such a way that we could add additional score types
     #   but lpips+dino are inverted & different range, so leaving separate rn
     plot_scores(lpips_scores, score_types=['lpips (lower is better)'], save_path=f'{path_to_save_to}/lpips_plot.png')
+    plot_scores(cmmd_scores, score_types=['CMMD (lower is better)'], save_path=f'{path_to_save_to}/cmmd_plot.png')
     plot_scores(dino_scores, score_types=['DINO Score (higher is better)'], save_path=f'{path_to_save_to}/dinoscore_plot.png')
 
     df = pd.DataFrame({
         'lpips': lpips_scores,
         'dinoscore': dino_scores,
+        'cmmd': cmmd_scores,
     })
     df.to_csv(f'{path_to_save_to}/scores.csv')
     print(f'{path_to_save_to}/scores.csv')
 
     min_lpips = min([min([v for v in vals]) for vals in lpips_scores.values()])
+    min_cmmd = min([min([v for v in vals]) for vals in cmmd_scores.values()])
     max_dino = max([max([v for v in vals]) for vals in dino_scores.values()])
 
     del model
@@ -148,23 +172,21 @@ def run_eval(
     gc.collect()
     torch.cuda.empty_cache()
     
-    return min_lpips, max_dino
+    return min_lpips, min_cmmd, max_dino
 
-to_eval = '''/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=False
-/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=True
-/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=True_included_data_subsets=('OutdoorNatural',)_shift_timesteps_resolution=True
-/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=Regenerate the image just as it was given._just_inf_timesteps=False
-/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=Regenerate the image just as it was given._just_inf_timesteps=True'''.splitlines()
+# path to lora
+to_job = '''logs/clancular_Semostomae_Camptonville/'''.splitlines()
 
 
 ckpts_to_scores = {}
-for e in to_eval:
-    for step in [1000]:
+for e in to_job:
+    for step in [500, 2000, 4000, 8500, 11000]:
         job_path, ckpt_step_path = e, f'{e}/{int(step)}_ckpt/pytorch_lora_weights.safetensors'
-        min_lpips, max_dino = run_eval(job_path, ckpt_step_path)
+        min_lpips, min_cmmd, max_dino = run_eval(job_path, ckpt_step_path, step=step)
         ckpts_to_scores[ckpt_step_path] = {
                                 'min_lpips': min_lpips,
-                                'max_dino': max_dino
+                                'max_dino': max_dino,
+                                'min_cmmd': min_cmmd,
                                 }
     
     df = pd.DataFrame(ckpts_to_scores)

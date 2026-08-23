@@ -78,10 +78,6 @@ def get_loss(model, images, scanpaths, config,
                 mus = []
                 for sample_ind in range(noise.shape[0]):
                    mu = compute_empirical_mu(latents_there_mask[sample_ind].amax(-1).sum(0), 4)
-                   print(latents_there_mask)
-                   print(latents_there_mask[sample_ind].amax(-1).sum(0))qq
-                   print(latents_there_mask.shape) # 64/similar
-                   print(mu) # 64/similar
                    mus.append(mu)
                 mus = torch.tensor(mus).to(u.device, u.dtype)
                 u = torch.exp(mus) / (torch.exp(mus) + (1 / u - 1) ** 1)
@@ -190,9 +186,14 @@ class Zoo(torch.nn.Module):
         return velocity
 
     @torch.no_grad()
-    def inference(self, cond_image=None, scanpath=None, guidance_scale=1, generator=None):
+    def inference(self, 
+                  cond_image=None, 
+                  scanpath=None, 
+                  guidance_scale=1,
+                  width_height=None, 
+                  generator=None):
         assert cond_image or scanpath is not None 
-        width, height = self.config.resolution
+        width, height = self.config.resolution if not width_height else width_height[0], width_height[1]
         offload_vae_back_to_cpu = False
         # infer vae device from the all params
         if any([p.device != torch.device('cuda:0') for p in self.pipe.vae.parameters()]):

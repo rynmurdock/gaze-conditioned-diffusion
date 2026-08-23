@@ -33,12 +33,14 @@
   - may be overfitting worse by only single trajectories per image
     [x] could use LoRA & switch on/off for student / teacher
   [x] qlora, train with adam, etc.
-  [] batch_size > 1 training
+  [x] batch_size > 1 training
     [x] remove older cached latents feature
     [x] remove older scanpath RoPE conditioning
     [x] support batch_size > 1 RoPE with test
     [x] pil images -> tensor -> vae
     [x] seq padding + attention masking with test
+    [x] modify dataloader for variable-resolution training
+        so we use our padding + masking there
 
   [x] option to add back text encoder
     [x] can fall back to diffusers klein+pipe & patch the RoPE
@@ -70,7 +72,7 @@
 [] further Klein speedup with vllm/llamaccp/etc.?
 
 
-[] variations on famous painitngs by scanpath
+[] variations on famous painting by scanpath
   [] look through your existing data
   [] collect your own scanpaths
 
@@ -94,10 +96,11 @@ hparam sweep:
   [] and for dataloader state?
 
 
-[] starting writeup
+[x] starting writeup
 [x] eval over checkpoints using lpips/clip/dinoscore
-  [] just to show d-opsd is necessary, ablate with normal flow-matching loss
+  - just to show d-opsd is necessary, could ablate with normal flow-matching loss
     - just need example image/similar to demonstrate
+    [x] not going to play into acting like that's necessary with d-opsd's papers experiments on it already
 
 [] copy of .py code files of repo into log file at point of launch
 
@@ -105,17 +108,16 @@ hparam sweep:
 [x] finetune on reasonable data
 
 [] given reasonable lr & rank, interesting comparisons are:
-  [] just_inf_timesteps (k or t)
+  [x] just_inf_timesteps (k or t)
     ./logs/kathemoglobin_Bonnette_Douai/ vs just_inf_version_corelates_Salzgitter_Steatornis
     - using lpips+dino; val loss won't be valid
-    [] try w/ shifting timesteps but only if k is close or less-good
+    [x] try w/ shifting timesteps but only if k is close
+[x] add CMMD
 [] correlation between val loss & reconstruction metrics
 
 [] dino + lpips score are thrown off by different types of images
     - i.e., a well-done product photo on white is nothing like the painting, ofc
   [] gaze -> image -> gaze/scanpath model compared to GT scanpath
-  [x] train/finetune on a specific type
+  [x] train/finetune on a specific image type
 
-
-
-
+[] cite Reben+Joel, cites for CMMD + lpips + dinoscore
