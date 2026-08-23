@@ -24,8 +24,8 @@ def ids_encode_pad_mask_images(model, images, dtype):
             img_tensor = img_tensor.to(model.device, dtype)[None]
             latent = model.pipe._encode_vae_image(img_tensor, None)
             imids = Flux2KleinPipeline._prepare_image_ids([latent]).to(latent.device)
-            image_ids.append(imids)
-            latents.append(latent)
+            image_ids.append(imids[0])
+            latents.append(model.pipe._pack_latents(latent)[0])
         padded_latents = torch.nn.utils.rnn.pad_sequence(latents, batch_first=True,).squeeze(1)
         latents_there_mask = torch.nn.utils.rnn.pad_sequence([torch.ones_like(l) for l in latents], 
                                                             batch_first=True, ).squeeze(1) > 0
@@ -43,6 +43,9 @@ def get_loss(model, images, scanpaths, config,
         zeroing_mask = torch.rand((scanpaths.shape[0], scanpaths.shape[1])) < .3
         scanpaths[zeroing_mask] = 0
 
+        # NOTE because x0 & hint are the same size, 
+        #   latents_there_mask can mask attn over both the teacher's given gt
+        #   and the student's scanpath hint when we repeat it along the seq dim       
         x0, typical_image_ids, latents_there_mask = ids_encode_pad_mask_images(model, 
                                                                        images, model.config.dtype)
         if scanpath_as_edit_image:
@@ -54,17 +57,11 @@ def get_loss(model, images, scanpaths, config,
                     device=x0.device,
                     dtype=x0.dtype,
                 )
+
             hint_drop_mask = torch.rand((x0.shape[0],)) < .2
             hint_latents[hint_drop_mask] = 0
 
-        x0 = model.pipe._pack_latents(x0)
-        # NOTE because x0 & hint are the same size, 
-        #   latents_there_mask can mask attn over both the teacher's given gt
-        #   and the student's scanpath hint when we repeat it along the seq dim
-        latents_there_mask = model.pipe._pack_latents(latents_there_mask)
-
         noise = torch.randn_like(x0)
-
         if config.just_inf_timesteps:
             timesteps = get_inf_timesteps(model.pipe.scheduler, x0, num_inference_steps=4, device='cuda',)
             k = torch.randint(0, 4, (noise.shape[0],)).to(x0.device)
@@ -76,9 +73,18 @@ def get_loss(model, images, scanpaths, config,
                 logit_mean=0,
                 logit_std=1,
             )
+            # shift per sample using its mask for seq len of non-padding
             if config.shift_timesteps_resolution:
-                mu = compute_empirical_mu(noise.shape[1], 4)
-                u = math.exp(mu) / (math.exp(mu) + (1 / u - 1) ** 1)
+                mus = []
+                for sample_ind in range(noise.shape[0]):
+                   mu = compute_empirical_mu(latents_there_mask[sample_ind].amax(-1).sum(0), 4)
+                   print(latents_there_mask)
+                   print(latents_there_mask[sample_ind].amax(-1).sum(0))qq
+                   print(latents_there_mask.shape) # 64/similar
+                   print(mu) # 64/similar
+                   mus.append(mu)
+                mus = torch.tensor(mus).to(u.device, u.dtype)
+                u = torch.exp(mus) / (torch.exp(mus) + (1 / u - 1) ** 1)
             indices = (u * model.noise_scheduler_copy.config.num_train_timesteps).long()
             timesteps = model.noise_scheduler_copy.timesteps[indices].to(device=x0.device)
         sigma = timesteps.view(-1, 1, 1) / 1000

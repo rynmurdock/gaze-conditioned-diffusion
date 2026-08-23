@@ -77,6 +77,21 @@ def _iter_records(obj):
 
     raise ValueError(f"Unexpected leaf array: dtype={arr.dtype}, shape={arr.shape}")
 
+def resize_to_max_keep_ar_and_vae(pil_img, max_w, max_h):
+    if pil_img.width > max_w or pil_img.height > max_h:
+        ar = pil_img.width / pil_img.height
+        ratio_w, ratio_h = max_w/pil_img.width, max_h/pil_img.height
+        resize_ratio = min(ratio_h, ratio_w)
+        pil_img = pil_img.resize((
+            int(pil_img.width*resize_ratio)//16*16, 
+            int(pil_img.height*resize_ratio)//16*16
+                                  ), Image.Resampling.LANCZOS)
+
+    # we preserved our aspect ratio besides rounding
+    assert abs(pil_img.width/pil_img.height - ar) < 1/8
+    # our image's size is less than maxes
+    assert pil_img.width < max_w or pil_img.height < max_h
+    return pil_img
 
 def _scalar_str(val):
     """Unwrap a MATLAB char-array-as-numpy-string back to a plain str."""
@@ -174,9 +189,9 @@ class ScanpathDataset(Dataset):
         orig_w, orig_h = pil_img.size
         left, right = _detect_horizontal_pad(np.asarray(pil_img))
         pil_img = pil_img.crop((left, 0, right, orig_h))
-        crop_w = pil_img.width
-        pil_img = pil_img.resize(self.stim_size, Image.BILINEAR)
-
+        pil_img = resize_to_max_keep_ar_and_vae(pil_img, # w, h
+                                        self.stim_size[0], self.stim_size[1])
+        
         # --- ordered scanpath ---
         fix = fix.copy()
         if self.coord_order == "yx":
@@ -184,8 +199,8 @@ class ScanpathDataset(Dataset):
 
         fix[:, 0] -= left
 
-        scale_x = self.stim_size[0] / crop_w
-        scale_y = self.stim_size[1] / orig_h
+        scale_x = self.stim_size[0] / pil_img.width
+        scale_y = self.stim_size[1] / pil_img.height
         fix[:, 0] *= scale_x
         fix[:, 1] *= scale_y
 
