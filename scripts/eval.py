@@ -104,6 +104,7 @@ def run_eval(
                 break
             total_scores += 1
 
+            
             scanpaths = sample['scanpaths'][0]
             gt_image = sample['pil_images'][0]
             for ind in guidance_scales:
@@ -122,8 +123,6 @@ def run_eval(
                     lpips = get_lpips(pred_image, gt_image)
                     pred_image.save(f'{pred_this_cmmd_dir}/{total_scores}.png')
                     gt_image.save(f'{gt_this_cmmd_dir}/{total_scores}.png')
-
-                print(f'{ind}: {lpips=}, {dinoscore=}')
 
                 if f'guidance_scale={ind}' in lpips_scores:
                     lpips_scores[f'guidance_scale={ind}'][0] += lpips
@@ -175,12 +174,16 @@ def run_eval(
     return min_lpips, min_cmmd, max_dino
 
 # path to lora
-to_job = '''logs/clancular_Semostomae_Camptonville/'''.splitlines()
+to_job = '''/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=False
+/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=True
+/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=True_included_data_subsets=('OutdoorNatural',)_shift_timesteps_resolution=True
+/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=Regenerate the image just as it was given._just_inf_timesteps=False
+/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=Regenerate the image just as it was given._just_inf_timesteps=True'''.splitlines()
 
 
 ckpts_to_scores = {}
 for e in to_job:
-    for step in [500, 2000, 4000, 8500, 11000]:
+    for step in [1000]:
         job_path, ckpt_step_path = e, f'{e}/{int(step)}_ckpt/pytorch_lora_weights.safetensors'
         min_lpips, min_cmmd, max_dino = run_eval(job_path, ckpt_step_path, step=step)
         ckpts_to_scores[ckpt_step_path] = {

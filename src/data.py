@@ -199,8 +199,8 @@ class ScanpathDataset(Dataset):
 
         fix[:, 0] -= left
 
-        scale_x = self.stim_size[0] / pil_img.width
-        scale_y = self.stim_size[1] / pil_img.height
+        scale_x = pil_img.width / orig_w
+        scale_y = pil_img.height / orig_h
         fix[:, 0] *= scale_x
         fix[:, 1] *= scale_y
 

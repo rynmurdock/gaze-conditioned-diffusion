@@ -16,6 +16,7 @@ from matio import load_from_mat
 from PIL import Image
 
 from src.data import _iter_records, _scalar_str, get_dataloader
+from src.config import main_config
 
 ROOT = "trainSet"
 MAT_PATH = "trainSet/allFixData.mat"
@@ -26,7 +27,7 @@ OUT_PATH = "scanpath_check.png"
 def collect_from_dataloader():
     pairs = []
     dataloader, _ = get_dataloader('trainSet', .1, 1, 11, 
-                                   seed=0, resolution=(512, 512),)
+                                   seed=0, resolution=(512, 512), config=main_config)
     for ind, d in enumerate(dataloader):
         d['pil_images'][0].save('pil_im.jpg')
         pairs.append((str(ind), d['pil_images'][0], '_', d['scanpaths'][0]))
