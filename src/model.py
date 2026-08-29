@@ -279,7 +279,9 @@ def add_lora(transformer, rank, target_modules):
         target_modules=target_modules,
         )
     transformer.add_adapter(transformer_lora_config)
-    print(f"trainable params: {transformer.num_parameters(only_trainable=True)} || all params: {transformer.num_parameters()}")
+    logging.info(f"""trainable params: 
+                 {transformer.num_parameters(only_trainable=True)} 
+                 || all params: {transformer.num_parameters()}""")
 
 @torch.no_grad()
 def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):

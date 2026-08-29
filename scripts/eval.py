@@ -76,6 +76,7 @@ def run_eval(
         n_samples=32,
         guidance_scales=[1, 1.1, 1.2, 3,],
         step=None,
+        job_n=None,
     ):
     config = Config.from_json(f'{path}/config.json')
     config.lora_path = lora_path
@@ -109,8 +110,10 @@ def run_eval(
             gt_image = sample['pil_images'][0]
             for ind in guidance_scales:
                 # saving into cmmd so I can use their existing structure of loading from disk
-                pred_this_cmmd_dir = f'pred_scratch_cmmd_{ind}_{step}/'
-                gt_this_cmmd_dir = f'gt_scratch_cmmd_{ind}_{step}/'
+                pred_this_cmmd_dir = f'pred_scratch_cmmd_{ind}_{step}_{job_n}/'
+                # not strictly necessary (dataloader shouldn't vary) 
+                #   but using multiple folders in case
+                gt_this_cmmd_dir = f'gt_scratch_cmmd_{ind}_{step}_{job_n}/'
                 os.makedirs(pred_this_cmmd_dir, exist_ok=True)
                 os.makedirs(gt_this_cmmd_dir, exist_ok=True)
 
@@ -136,13 +139,13 @@ def run_eval(
 
     cmmd_scores = {}
     for ind in guidance_scales:
-        pred_this_cmmd_dir = f'pred_scratch_cmmd_{ind}_{step}/'
-        gt_this_cmmd_dir = f'gt_scratch_cmmd_{ind}_{step}/'
+        pred_this_cmmd_dir = f'pred_scratch_cmmd_{ind}_{step}_{job_n}/'
+        gt_this_cmmd_dir = f'gt_scratch_cmmd_{ind}_{step}_{job_n}/'
 
         metric = logic.CMMD(data_parallel=True, device_ids=[0])
         score_cmmd = metric.execute(pred_this_cmmd_dir, gt_this_cmmd_dir)
         cmmd_scores[f'guidance_scale={ind}'] = [score_cmmd]
-        shutil.rmtree(pred_this_cmmd_dir)
+        # shutil.rmtree(pred_this_cmmd_dir)
         shutil.rmtree(gt_this_cmmd_dir)
 
     lpips_scores = {k: [v / total_scores for v in vals] for k, vals in lpips_scores.items()}
@@ -174,18 +177,14 @@ def run_eval(
     return min_lpips, min_cmmd, max_dino
 
 # path to lora
-to_job = '''/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=False
-/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=True
-/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=True_included_data_subsets=('OutdoorNatural',)_shift_timesteps_resolution=True
-/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=Regenerate the image just as it was given._just_inf_timesteps=False
-/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=Regenerate the image just as it was given._just_inf_timesteps=True'''.splitlines()
+to_job = '''/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/ascendants_Monograptus_Tyzine'''.splitlines()
 
 
 ckpts_to_scores = {}
-for e in to_job:
-    for step in [1000]:
+for jn, e in enumerate(to_job):
+    for step in [500, 1000, 1500]:
         job_path, ckpt_step_path = e, f'{e}/{int(step)}_ckpt/pytorch_lora_weights.safetensors'
-        min_lpips, min_cmmd, max_dino = run_eval(job_path, ckpt_step_path, step=step)
+        min_lpips, min_cmmd, max_dino = run_eval(job_path, ckpt_step_path, job_n=jn, step=step)
         ckpts_to_scores[ckpt_step_path] = {
                                 'min_lpips': min_lpips,
                                 'max_dino': max_dino,

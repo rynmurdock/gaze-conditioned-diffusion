@@ -13,10 +13,16 @@ from PIL import Image, ImageDraw
 from torch.utils.data import DataLoader, Dataset
 from torchvision.transforms import functional as TF
 
+
+
 def scanpath_over_pil_image(scanpath: np.array, pil_img=None, w=None, h=None,
                              max_size=30, min_size=8, color=(255, 0, 0, 160),
                              line_color=None, line_width=2,
                              just_path=False):
+    # NOTE this is load-bearing!!! 
+    #   Model generation will be OOD if you train & then modify this function!
+
+
     """
     scanpath: (T, 2 or 3) array of (x, y) points, in temporal order.
     Point size shrinks with index -> first fixation is biggest.
