@@ -235,7 +235,7 @@ class Zoo(torch.nn.Module):
             width, height = self.config.resolution
             cond_img, scanpath = get_random_scanpath_cond_im(width, height, 
                                                              generator=scanpath_generator)
-            image = self.inference(cond_img, scanpath, guidance_scale, latent_seed_generator)
+            image = self.inference(cond_img, scanpath, guidance_scale, (width, height), latent_seed_generator)
             logging.info(f'Saving at {self.config.log_dir}/sans_scanpath-latest_val_{ind}_{im_n}.png')
             image.save(f'{self.config.log_dir}/sans_scanpath-latest_val_{ind}_{im_n}.png')
             image = scanpath_over_pil_image(scanpath[0], image)
