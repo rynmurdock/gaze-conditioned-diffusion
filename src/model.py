@@ -179,8 +179,8 @@ class Zoo(torch.nn.Module):
                 guidance=None,
                 encoder_hidden_states=prompt_embeds,
                 txt_ids=txt_ids,
-                img_ids=image_ids,  # B, image_seq_len, 4
-                joint_attention_kwargs={'attention_mask':attention_mask},
+                img_ids=image_ids, # B, image_seq_len, 4
+                joint_attention_kwargs={'attention_mask': attention_mask},
                 return_dict=False,
         )[0]
         return velocity
@@ -228,7 +228,7 @@ class Zoo(torch.nn.Module):
         return image
 
     @torch.no_grad()
-    def do_qual_val(self, guidance_scale=1, im_n=0,):
+    def do_qual_val(self, guidance_scale=1, im_n=0, step_n=None):
         latent_seed_generator = torch.Generator(device="cuda").manual_seed(self.seed)
         for ind, this_seed in enumerate([self.seed, self.seed+179]):
             scanpath_generator = torch.Generator(device="cuda").manual_seed(this_seed)
@@ -237,9 +237,9 @@ class Zoo(torch.nn.Module):
                                                              generator=scanpath_generator)
             image = self.inference(cond_img, scanpath, guidance_scale, (width, height), latent_seed_generator)
             logging.info(f'Saving at {self.config.log_dir}/sans_scanpath-latest_val_{ind}_{im_n}.png')
-            image.save(f'{self.config.log_dir}/sans_scanpath-latest_val_{ind}_{im_n}.png')
+            image.save(f'{self.config.log_dir}/sans_scanpath-latest_val_{step_n}_{ind}_{im_n}.png')
             image = scanpath_over_pil_image(scanpath[0], image)
-            image.save(f'{self.config.log_dir}/latest_val_{ind}_{im_n}.png')
+            image.save(f'{self.config.log_dir}/latest_val_{step_n}_{ind}_{im_n}.png')
 
     
     @torch.no_grad()

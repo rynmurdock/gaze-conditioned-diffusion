@@ -291,9 +291,6 @@ def get_dataloader(
         config,
         ):
     # root should contain a `Stimuli/` subfolder (e.g. Stimuli/Action/001.jpg)
-
-    # TODO init and this setup should be modified to be config -> dataloader
-    #     required params can be args while rest are in the config.
     
     dataset = ScanpathDataset(
         root=data_path,
