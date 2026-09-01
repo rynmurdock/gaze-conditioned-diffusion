@@ -1,4 +1,3 @@
-import math
 import torch
 import logging
 from tqdm import tqdm
@@ -68,7 +67,7 @@ def get_loss(model, images, scanpaths, config,
             timesteps = timesteps[k]
         else:
             u = compute_density_for_timestep_sampling(
-                weighting_scheme='logit_normal',
+                weighting_scheme=config.timestep_density_fn if config.timestep_density_fn else 'logit_normal',
                 batch_size=x0.shape[0],
                 logit_mean=0,
                 logit_std=1,
@@ -153,7 +152,6 @@ class Zoo(torch.nn.Module):
         # NOTE: dtype is the mixed dtype; transformer is still in float32
         self.device, self.dtype = device, dtype
         self.config = config
-
         self.noise_scheduler_copy = deepcopy(pipe.scheduler)
 
     def forward(self, latents, timesteps, image_ids, 

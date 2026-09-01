@@ -125,6 +125,7 @@ class ScanpathDataset(Dataset):
                  included_data_subsets=None,
                  excluded_data_subsets=None,
                  coord_order="xy",
+                 fixed_resolution=False,
                  ):
         """
         root:        dataset root containing `stimuli/`
@@ -139,6 +140,7 @@ class ScanpathDataset(Dataset):
         self.stim_dir = os.path.join(root, "Stimuli")
         self.stim_size = stim_size
         self.coord_order = coord_order
+        self.fixed_resolution = fixed_resolution
 
         mat = load_from_mat(mat_path)
         all_data = mat["allData"]  # dict-like MatlabContainerMap: key -> stimulus
@@ -195,8 +197,11 @@ class ScanpathDataset(Dataset):
         orig_w, orig_h = pil_img.size
         left, right = _detect_horizontal_pad(np.asarray(pil_img))
         pil_img = pil_img.crop((left, 0, right, orig_h))
-        pil_img = resize_to_max_keep_ar_and_vae(pil_img, # w, h
+        if not self.fixed_resolution:
+            pil_img = resize_to_max_keep_ar_and_vae(pil_img, # w, h
                                         self.stim_size[0], self.stim_size[1])
+        else:
+            pil_img = pil_img.resize((self.stim_size[0], self.stim_size[1]))
         
         # --- ordered scanpath ---
         fix = fix.copy()
@@ -297,7 +302,8 @@ def get_dataloader(
         mat_path=f"{data_path}/allFixData.mat",
         stim_size=resolution,
         included_data_subsets=config.included_data_subsets,
-        excluded_data_subsets=config.excluded_data_subsets
+        excluded_data_subsets=config.excluded_data_subsets,
+        fixed_resolution=config.fixed_resolution,
     )
 
     assert val_data_split_ratio < 1 and val_data_split_ratio > 0

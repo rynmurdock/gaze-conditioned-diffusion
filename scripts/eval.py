@@ -88,12 +88,14 @@ def run_eval(
                                         config.dtype, config.seed, config.do_compile, config)
     model.config.log_dir = './'
 
+    if not hasattr(config, 'fixed_resolution'):
+        config.fixed_resolution = True
 
     model.config.seed = 11
     torch.manual_seed(model.config.seed)
     __train_dataloader, val_dataloader = get_dataloader(config.data_path, config.val_data_split_ratio,
                                                     config.batch_size, config.num_workers, config.seed,
-                                                    config.resolution, config)
+                                                    config.resolution, config, )
 
     total_scores = 0
     lpips_scores = {}
@@ -177,12 +179,17 @@ def run_eval(
     return min_lpips, min_cmmd, max_dino
 
 # path to lora
-to_job = '''/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/ascendants_Monograptus_Tyzine'''.splitlines()
+to_job = '''/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=False
+/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=True
+/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=True_included_data_subsets=('OutdoorNatural',)_shift_timesteps_resolution=True
+/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=Regenerate the image just as it was given._just_inf_timesteps=False
+/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=Regenerate the image just as it was given._just_inf_timesteps=True
+/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=10000_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=True'''.splitlines()
 
 
 ckpts_to_scores = {}
 for jn, e in enumerate(to_job):
-    for step in [500, 1000, 1500]:
+    for step in [1000,]:
         job_path, ckpt_step_path = e, f'{e}/{int(step)}_ckpt/pytorch_lora_weights.safetensors'
         min_lpips, min_cmmd, max_dino = run_eval(job_path, ckpt_step_path, job_n=jn, step=step)
         ckpts_to_scores[ckpt_step_path] = {

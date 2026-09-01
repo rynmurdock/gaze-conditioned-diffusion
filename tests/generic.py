@@ -96,6 +96,13 @@ def test_attention_mask_and_batched_rope():
 
     latents = torch.nn.utils.rnn.pad_sequence([latents[0], two_latents[0]], 
                                                     batch_first=True, padding_value=10000).squeeze(1)
+
+    latents_neg520_padded = torch.nn.utils.rnn.pad_sequence([latents[0], two_latents[0]], 
+                                                    batch_first=True, padding_value=-520).squeeze(1)
+
+    diff_latents = torch.nn.utils.rnn.pad_sequence([torch.randn_like(latents[0]), torch.randn_like(two_latents[0])], 
+                                                    batch_first=True, padding_value=10000).squeeze(1)
+    
     timesteps = torch.cat([timesteps, two_timesteps])
     p_embs = torch.cat([p_embs, two_p_embs])
     txt_ids = torch.cat([txt_ids[None], two_txt_ids])
@@ -125,10 +132,41 @@ def test_attention_mask_and_batched_rope():
                 img_ids=img_ids,  # B, image_seq_len, 4
                 return_dict=False,
             )[0]
+    
     batch_size_3_out_sans_mask = batch_size_3_out_sans_mask[:, : latents.size(1) :]
     batch_size_3_out = batch_size_3_out[:, : latents.size(1) :]
     batch_size_1_out = batch_size_1_out[:, : latents.size(1) :]
     assert torch.equal(batch_size_1_out, batch_size_3_out[:1, :batch_size_1_out.shape[1]]), (batch_size_1_out - batch_size_3_out[:1, :batch_size_1_out.shape[1]]).abs().max()
+
+    # invariant to padding
+    batch_size_3_out_diff_padding = transformer(
+                        hidden_states=latents_neg520_padded,  # (B, image_seq_len, C)
+                        timestep=timesteps / 1000,
+                        guidance=None,
+                        encoder_hidden_states=p_embs,
+                        txt_ids=txt_ids,
+                        img_ids=img_ids,  # B, image_seq_len, 4
+                        joint_attention_kwargs={'attention_mask':attn_mask},
+                        return_dict=False,
+                    )[0]
+    
+    batch_size_3_out_diff_padding = batch_size_3_out_diff_padding[:, : latents.size(1) :]
+    assert torch.equal(batch_size_3_out, batch_size_3_out_diff_padding), (batch_size_3_out - batch_size_3_out_diff_padding).abs().max()
+
+    # variant to latents
+    batch_size_3_out_diff_latents = transformer(
+                        hidden_states=diff_latents,  # (B, image_seq_len, C)
+                        timestep=timesteps / 1000,
+                        guidance=None,
+                        encoder_hidden_states=p_embs,
+                        txt_ids=txt_ids,
+                        img_ids=img_ids,  # B, image_seq_len, 4
+                        joint_attention_kwargs={'attention_mask':attn_mask},
+                        return_dict=False,
+                    )[0]
+    batch_size_3_out_diff_padding = batch_size_3_out_diff_padding[:, : latents.size(1) :]
+    assert not torch.equal(batch_size_3_out_diff_latents, batch_size_3_out_diff_padding), (batch_size_3_out - batch_size_3_out_diff_padding).abs().max()
+
 
 def test_dinoscore():
     from utils.eval_utils import pil_to_n1_1_tensor, get_dinoscore

@@ -127,7 +127,7 @@ Training {len(trained_params)} torch modules
 
             total_inds += 1
             if total_inds % config.freq == 0:
-                logging.info('Saving our transformer')
+                logging.info(f'Saving our transformer to {config.log_dir}/{total_inds}_ckpt/')
                 if config.lora_rank:
                     # from_pt=True can't be used here
                     model.pipe.transformer.save_lora_adapter(f'{config.log_dir}/{total_inds}_ckpt/', 

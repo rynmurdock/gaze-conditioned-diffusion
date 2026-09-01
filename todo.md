@@ -115,9 +115,12 @@ hparam sweep:
 [x] add CMMD
 [] correlation between val loss & reconstruction metrics
 
-[] dino + lpips score are thrown off by different types of images
+[x] dino + lpips score are thrown off by different types of images
     - i.e., a well-done product photo on white is nothing like the painting, ofc
-  [] gaze -> image -> gaze/scanpath model compared to GT scanpath
+  [] use scanpath index metrics for: gaze -> image -> gaze/scanpath model compared to GT scanpath
   [x] train/finetune on a specific image type
+[x] last cmmd eval making sure to add support for eval with fixed resolution
 
 [] cite Reben+Joel, cites for CMMD + lpips + dinoscore
+
+

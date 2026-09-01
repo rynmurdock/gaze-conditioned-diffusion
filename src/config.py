@@ -13,8 +13,8 @@ class Config:
     ### Model
     # model_path = None
     transformer_model_path = None
-    lora_path = None # '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/apostatising_Laennec_Phiona/53000_ckpt/pytorch_lora_weights.safetensors'
-    seed: int = 13
+    lora_path = None
+    seed: int = 14
 
     #### seems consistently better to keep text encoder; use edit image
     remove_text_encoder: bool = False
@@ -26,6 +26,7 @@ class Config:
     sample_teacher: bool = True
 
     just_inf_timesteps: bool = False
+    timestep_density_fn: str = 'uniform'
     # just_inf_timesteps will automatically already shift, 
     #   so this does nothing if just_inf_timesteps=False
     shift_timesteps_resolution: bool = True
@@ -35,13 +36,13 @@ class Config:
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 3
-    lr: float = 5e-6
+    batch_size: int = 8
+    lr: float = 1e-4
     use_prompt: str = 'The scene.'
 
     # teacher gives the input image back in most cases
     #   sans instruction
-    teacher_use_prompt: str = 'Regenerate the image just as it was given.'
+    teacher_use_prompt: str = ''
 
     ### Training
     epochs: int = 3000000000000
@@ -56,7 +57,7 @@ class Config:
     # specifically for *mixed precision*
     # we parse torch dtypes to str on saving & then back on loading for simplicity
     dtype: torch.dtype = field(default=torch.bfloat16, repr=False)
-    activation_checkpointing: bool = True
+    activation_checkpointing: bool = False
 
     ### Data
     included_data_subsets: tuple[str] = ('Art', )
@@ -69,6 +70,8 @@ class Config:
     num_workers: int = 20
     # width & height side lengths
     resolution: tuple[int, int] = (768, 384)
+    # whether to always simple-resize to the resolution (older ckpts did this)
+    fixed_resolution: bool = False
 
     ### Logging
     exp_name: str = None
