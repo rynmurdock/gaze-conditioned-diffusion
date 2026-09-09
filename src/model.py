@@ -190,8 +190,8 @@ class Zoo(torch.nn.Module):
                   guidance_scale=1,
                   width_height=None, 
                   generator=None):
-        assert cond_image or scanpath is not None 
-        width, height = self.config.resolution if not width_height else width_height[0], width_height[1]
+        assert cond_image or scanpath is not None
+        width, height = self.config.resolution if not width_height else (width_height[0], width_height[1])
         offload_vae_back_to_cpu = False
         # infer vae device from the all params
         if any([p.device != torch.device('cuda:0') for p in self.pipe.vae.parameters()]):

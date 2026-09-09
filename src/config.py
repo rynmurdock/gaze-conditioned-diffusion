@@ -22,7 +22,7 @@ class Config:
     scanpath_as_edit_image: bool = True
     ####
 
-    lora_rank: int = 128
+    lora_rank: int = 16
     sample_teacher: bool = True
 
     just_inf_timesteps: bool = False
@@ -36,7 +36,7 @@ class Config:
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 8
+    batch_size: int = 4
     lr: float = 1e-4
     use_prompt: str = 'The scene.'
 
@@ -57,7 +57,7 @@ class Config:
     # specifically for *mixed precision*
     # we parse torch dtypes to str on saving & then back on loading for simplicity
     dtype: torch.dtype = field(default=torch.bfloat16, repr=False)
-    activation_checkpointing: bool = False
+    activation_checkpointing: bool = True
 
     ### Data
     included_data_subsets: tuple[str] = ('Art', )

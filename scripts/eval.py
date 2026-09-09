@@ -20,10 +20,6 @@ from config import Config
 from data import get_dataloader, scanpath_over_pil_image
 from utils.eval_utils import get_dinoscore, get_lpips
 
-import numpy as np
-import matplotlib.pyplot as plt
-
-
 
 def plot_scores(scores, 
                 score_types, 
@@ -106,7 +102,6 @@ def run_eval(
             if total_scores >= n_samples:
                 break
             total_scores += 1
-
             
             scanpaths = sample['scanpaths'][0]
             gt_image = sample['pil_images'][0]
@@ -179,17 +174,12 @@ def run_eval(
     return min_lpips, min_cmmd, max_dino
 
 # path to lora
-to_job = '''/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=False
-/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=True
-/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=True_included_data_subsets=('OutdoorNatural',)_shift_timesteps_resolution=True
-/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=Regenerate the image just as it was given._just_inf_timesteps=False
-/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=1010_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=Regenerate the image just as it was given._just_inf_timesteps=True
-/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/remote_gaze_logs/lr=0.0001_lora_rank=128_max_steps=10000_batch_size=32_activation_checkpointing=True_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=True'''.splitlines()
+to_job = '''/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/self-aim_Sabaoth_Geoplanidae'''.splitlines()
 
 
 ckpts_to_scores = {}
 for jn, e in enumerate(to_job):
-    for step in [1000,]:
+    for step in range(11500, 18000, 1000):
         job_path, ckpt_step_path = e, f'{e}/{int(step)}_ckpt/pytorch_lora_weights.safetensors'
         min_lpips, min_cmmd, max_dino = run_eval(job_path, ckpt_step_path, job_n=jn, step=step)
         ckpts_to_scores[ckpt_step_path] = {
@@ -197,7 +187,6 @@ for jn, e in enumerate(to_job):
                                 'max_dino': max_dino,
                                 'min_cmmd': min_cmmd,
                                 }
-    
     df = pd.DataFrame(ckpts_to_scores)
     df.to_csv(f'{job_path}_scores.csv')
 min_lpips_d = {k: [v['min_lpips']] for k, v in ckpts_to_scores.items()}
