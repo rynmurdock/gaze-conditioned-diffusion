@@ -26,7 +26,7 @@ class Config:
     sample_teacher: bool = True
 
     just_inf_timesteps: bool = False
-    timestep_density_fn: str = 'uniform'
+    timestep_density_fn: str = 'logit_normal'
     # just_inf_timesteps will automatically already shift, 
     #   so this does nothing if just_inf_timesteps=False
     shift_timesteps_resolution: bool = True
@@ -37,7 +37,7 @@ class Config:
 
     ### Hparams
     batch_size: int = 4
-    lr: float = 1e-4
+    lr: float = 4e-5
     use_prompt: str = 'The scene.'
 
     # teacher gives the input image back in most cases
@@ -60,10 +60,13 @@ class Config:
     activation_checkpointing: bool = True
 
     ### Data
-    included_data_subsets: tuple[str] = ('Art', )
-    # we use this for excluding specific samples in "Art" here
-    #   be aware that other subsets may use these filenames!
-    excluded_data_subsets: tuple[str] = ('035.jpg', '079.jpg', '111.jpg', '115.jpg')
+    # TODO could un-invert intverted subset for addditional right-side-up data
+    included_data_subsets: tuple[str] = ('Art', 'Affective', 'Action',
+                                         'BlackWhite', 'Fractal', 'Indoor',
+                                         'Inverted', 'OutdoorManMade', 'OutdoorNatural',
+                                         'Random', 'Social')
+    # we use this for excluding specific low-resolution samples in "Art" here
+    excluded_data_subsets: tuple[str] = ('Art/035.jpg', 'Art/079.jpg', 'Art/111.jpg', 'Art/115.jpg')
 
     data_path: str = 'trainSet'
     val_data_split_ratio: int = .1

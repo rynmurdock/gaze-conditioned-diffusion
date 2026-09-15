@@ -11,18 +11,19 @@ import gc
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from clip_mmd import logic
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 from model import get_model_and_tokenizer
 from config import Config
 from data import get_dataloader, scanpath_over_pil_image
-from utils.eval_utils import get_dinoscore, get_lpips
+
 
 
 def plot_scores(scores, 
                 score_types, 
+                attribute, 
+                bar=True,
                 save_path='scratch/plot.png'):
     """
     Grouped bar chart of scores by guidance scale.
@@ -36,17 +37,26 @@ def plot_scores(scores,
     fig, ax = plt.subplots(figsize=(max(7, 1.4 * n_groups), 5), layout='constrained')
     colors = plt.cm.viridis(np.linspace(0.1, 0.9, n_groups))
 
-    for i, group in enumerate(groups):
-        vals = [scores[group][st] for st in range(len(labels))]
-        offset = (i - (n_groups - 1) / 2) * width
-        ax.bar(x + offset, vals, width, label=str(group), color=colors[i],
-               edgecolor='white', linewidth=0.6)
+    if bar:
+        for i, group in enumerate(groups):
+                vals = [scores[group][st] for st in range(len(labels))]
+                offset = (i - (n_groups - 1) / 2) * width
+                ax.bar(x + offset, vals, width, label=str(group), color=colors[i],
+                    edgecolor='white', linewidth=0.6)
+        ax.set_xticks(x, labels, fontsize=12)
+    else:
+        for i, col in enumerate(['LPIPS (lower is better)', 'CMMD (lower is better)']):
+            x = [float(s.split('=')[-1]) for s in scores.keys()]
+            y = [j[i] for j in list(scores.values())]
+            ax.plot(x, y, label=col, color=colors[i],
+                linewidth=0.6)
+            ax.set_xticks(x, )
+            
 
-    ax.set_xticks(x, labels, fontsize=12)
     ax.set_ylabel('Score', fontsize=11)
-    ax.set_title('Score Comparison Across Guidance Scales', fontsize=13,
-                  fontweight='bold', pad=14)
-    max_val = max(v for inner in scores.values() for v in inner)
+    # ax.set_title(f'Metrics across {attribute}', fontsize=13,
+    #               fontweight='bold', pad=14)
+    max_val = max(float(v) for inner in scores.values() for v in inner)
     ax.set_ylim(0, max_val * 1.15)
 
     ax.spines['top'].set_visible(False)
@@ -57,7 +67,7 @@ def plot_scores(scores,
     ax.tick_params(axis='both', length=0)
 
     leg = ax.legend(frameon=False, loc='upper center', bbox_to_anchor=(0.5, -0.08),
-                     ncol=n_groups, fontsize=9.5, title='Guidance scale',
+                     ncol=n_groups, fontsize=9.5, title=attribute,
                      title_fontsize=10, handlelength=1.2, columnspacing=1.2)
     leg.get_title().set_fontweight('bold')
 
@@ -173,22 +183,27 @@ def run_eval(
     
     return min_lpips, min_cmmd, max_dino
 
-# path to lora
-to_job = '''/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/self-aim_Sabaoth_Geoplanidae'''.splitlines()
+
+if __name__ == "__main__":
+    from clip_mmd import logic
+    from utils.eval_utils import get_dinoscore, get_lpips
+
+    # path to lora
+    to_job = '''/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/self-aim_Sabaoth_Geoplanidae'''.splitlines()
 
 
-ckpts_to_scores = {}
-for jn, e in enumerate(to_job):
-    for step in range(11500, 18000, 1000):
-        job_path, ckpt_step_path = e, f'{e}/{int(step)}_ckpt/pytorch_lora_weights.safetensors'
-        min_lpips, min_cmmd, max_dino = run_eval(job_path, ckpt_step_path, job_n=jn, step=step)
-        ckpts_to_scores[ckpt_step_path] = {
-                                'min_lpips': min_lpips,
-                                'max_dino': max_dino,
-                                'min_cmmd': min_cmmd,
-                                }
-    df = pd.DataFrame(ckpts_to_scores)
-    df.to_csv(f'{job_path}_scores.csv')
-min_lpips_d = {k: [v['min_lpips']] for k, v in ckpts_to_scores.items()}
-plot_scores(min_lpips_d, score_types=['best lpips (lower is better)'], save_path=f'{job_path}_scores.png')
+    ckpts_to_scores = {}
+    for jn, e in enumerate(to_job):
+        for step in range(11500, 18000, 1000):
+            job_path, ckpt_step_path = e, f'{e}/{int(step)}_ckpt/pytorch_lora_weights.safetensors'
+            min_lpips, min_cmmd, max_dino = run_eval(job_path, ckpt_step_path, job_n=jn, step=step)
+            ckpts_to_scores[ckpt_step_path] = {
+                                    'min_lpips': min_lpips,
+                                    'max_dino': max_dino,
+                                    'min_cmmd': min_cmmd,
+                                    }
+        df = pd.DataFrame(ckpts_to_scores)
+        df.to_csv(f'{job_path}_scores.csv')
+    min_lpips_d = {k: [v['min_lpips']] for k, v in ckpts_to_scores.items()}
+    plot_scores(min_lpips_d, score_types=['best lpips (lower is better)'], save_path=f'{job_path}_scores.png')
 
