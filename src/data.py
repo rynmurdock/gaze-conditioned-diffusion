@@ -257,15 +257,12 @@ def collate_scanpaths(batch):
     """
     try:
         # we can just take the max to get our scanpath images
-        mh, mw = max([b['pil_img'].height for b in batch]), max([b['pil_img'].width for b in batch])
         l_scanpaths_sans_contents = []
         for b in batch:
-            scanpath_sans_contents = scanpath_over_pil_image(b['scanpath'], h=mh, w=mw, just_path=True)
+            scanpath_sans_contents = scanpath_over_pil_image(b['scanpath'], h=b['pil_img'].height, w=b['pil_img'].width, just_path=True)
             scanpath_sans_contents = TF.to_tensor(scanpath_sans_contents) * 2 - 1
             l_scanpaths_sans_contents.append(scanpath_sans_contents)
 
-        # (3, H, W), values in [-1, 1]
-        scanpath_sans_contents = torch.stack(l_scanpaths_sans_contents, dim=0)
         lengths = torch.tensor([b["length"] for b in batch], dtype=torch.long)
         n_coords = batch[0]["scanpath"].shape[1]
         t_max = int(lengths.max().item())
@@ -280,7 +277,7 @@ def collate_scanpaths(batch):
         image_paths = [b["img_path"] for b in batch]
 
         return {
-            "scanpath_sans_contents": scanpath_sans_contents,
+            "scanpath_sans_contents": l_scanpaths_sans_contents,
             "scanpaths": scanpaths,    # (B, T_max, C), zero-padded past `lengths`
             "lengths": lengths,        # (B,)
             "stim_names": stim_names,

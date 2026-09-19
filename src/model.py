@@ -18,18 +18,22 @@ def ids_encode_pad_mask_images(model, images, dtype):
     with torch.autocast(device_type='cuda', enabled=True, dtype=dtype):
         latents = []
         image_ids = []
+        latent_ids = []
         for pil_img in images:
             img_tensor = TF.to_tensor(pil_img) * 2 - 1  # (3, H, W), values in [-1, 1]
             img_tensor = img_tensor.to(model.device, dtype)[None]
             latent = model.pipe._encode_vae_image(img_tensor, None)
             imids = Flux2KleinPipeline._prepare_image_ids([latent]).to(latent.device)
+            latids = Flux2KleinPipeline._prepare_latent_ids(latent).to(latent.device)
             image_ids.append(imids[0])
+            latent_ids.append(latids[0])
             latents.append(model.pipe._pack_latents(latent)[0])
         padded_latents = torch.nn.utils.rnn.pad_sequence(latents, batch_first=True,).squeeze(1)
         latents_there_mask = torch.nn.utils.rnn.pad_sequence([torch.ones_like(l) for l in latents], 
                                                             batch_first=True, ).squeeze(1) > 0
         image_ids = torch.nn.utils.rnn.pad_sequence(image_ids, batch_first=True).squeeze(1)
-        return padded_latents, image_ids, latents_there_mask
+        latent_ids = torch.nn.utils.rnn.pad_sequence(latent_ids, batch_first=True).squeeze(1)
+        return padded_latents, image_ids, latents_there_mask, latent_ids
 
 def get_loss(model, images, scanpaths, config, 
              scanpath_sans_contents=None, dtype=None,):
@@ -38,24 +42,12 @@ def get_loss(model, images, scanpaths, config,
 
     dtype = model.dtype if not dtype else dtype
     with torch.no_grad():
-        # rng drop out inputs
-        zeroing_mask = torch.rand((scanpaths.shape[0], scanpaths.shape[1])) < .3
-        scanpaths[zeroing_mask] = 0
-
-        # NOTE because x0 & hint are the same size, 
-        #   latents_there_mask can mask attn over both the teacher's given gt
-        #   and the student's scanpath hint when we repeat it along the seq dim       
-        x0, typical_image_ids, latents_there_mask = ids_encode_pad_mask_images(model, 
+        x0, typical_image_ids, latents_there_mask, noisy_image_ids = ids_encode_pad_mask_images(model, 
                                                                        images, model.config.dtype)
+        
         if scanpath_as_edit_image:
-            # scanpath_sans_contents is always padded longest
-            hint_latents, hint_ids = model.pipe.prepare_image_latents(
-                    images=[scanpath_sans_contents[:1]],
-                    batch_size=x0.shape[0],
-                    generator=torch.Generator(device='cuda'),
-                    device=x0.device,
-                    dtype=x0.dtype,
-                )
+            hint_latents, hint_ids, _, _ = ids_encode_pad_mask_images(model, 
+                                                                      scanpath_sans_contents, model.config.dtype)
 
             hint_drop_mask = torch.rand((x0.shape[0],)) < .2
             hint_latents[hint_drop_mask] = 0
@@ -89,7 +81,7 @@ def get_loss(model, images, scanpaths, config,
             model.pipe.transformer.disable_lora()
             
             latent_model_input = torch.cat([latents, x0], dim=1).to(model.pipe.transformer.dtype)
-            latent_image_ids = torch.cat([typical_image_ids, typical_image_ids], dim=1)
+            latent_image_ids = torch.cat([noisy_image_ids, typical_image_ids], dim=1)
             teacher_noise_pred = model(latent_model_input, 
                        timesteps=timesteps, image_ids=latent_image_ids, 
                        prompt_embeds=model.pipe.cached_teacher_prompt,
@@ -99,11 +91,14 @@ def get_loss(model, images, scanpaths, config,
             teacher_noise_pred = teacher_noise_pred[:, : latents.size(1) :]
             model.pipe.transformer.enable_lora()
 
-
     with torch.autocast(device_type='cuda', enabled=not config.quantize_model, dtype=dtype):
         if scanpath_as_edit_image:
             latent_model_input = torch.cat([latents, hint_latents], dim=1).to(model.pipe.transformer.dtype)
-            latent_image_ids = torch.cat([typical_image_ids, hint_ids], dim=1)
+            latent_image_ids = torch.cat([noisy_image_ids, hint_ids], dim=1)
+
+        assert torch.equal(hint_ids, typical_image_ids), (
+            f'Not equal: {hint_ids} {typical_image_ids}'
+        )
 
         output = model(latents if not scanpath_as_edit_image else latent_model_input, 
                        timesteps=timesteps, image_ids=latent_image_ids,

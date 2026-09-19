@@ -37,12 +37,12 @@ class Config:
 
     ### Hparams
     batch_size: int = 4
-    lr: float = 4e-5
+    lr: float = 1e-4
     use_prompt: str = 'The scene.'
 
     # teacher gives the input image back in most cases
     #   sans instruction
-    teacher_use_prompt: str = ''
+    teacher_use_prompt: str = 'Return the image without changes.'
 
     ### Training
     epochs: int = 3000000000000
@@ -57,7 +57,7 @@ class Config:
     # specifically for *mixed precision*
     # we parse torch dtypes to str on saving & then back on loading for simplicity
     dtype: torch.dtype = field(default=torch.bfloat16, repr=False)
-    activation_checkpointing: bool = True
+    activation_checkpointing: bool = False
 
     ### Data
     # TODO could un-invert intverted subset for addditional right-side-up data
@@ -66,7 +66,8 @@ class Config:
                                          'Inverted', 'OutdoorManMade', 'OutdoorNatural',
                                          'Random', 'Social')
     # we use this for excluding specific low-resolution samples in "Art" here
-    excluded_data_subsets: tuple[str] = ('Art/035.jpg', 'Art/079.jpg', 'Art/111.jpg', 'Art/115.jpg')
+    excluded_data_subsets: tuple[str] = ('Art/035.jpg', 'Art/079.jpg', 
+                                            'Art/111.jpg', 'Art/115.jpg')
 
     data_path: str = 'trainSet'
     val_data_split_ratio: int = .1
