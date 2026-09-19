@@ -4,7 +4,7 @@ from tqdm import tqdm
 from copy import deepcopy
 
 from modeling.pipe_modded_klein import Flux2KleinPipeline
-from modeling.image_cfg_pipe_modded_klein import ImageCFGFlux2KleinPipeline, compute_empirical_mu
+from modeling.image_cfg_pipe_modded_klein import ImageCFGFlux2KleinPipeline, compute_empirical_mu, calculate_shift
 from modeling.modded_klein import Flux2Transformer2DModel, prepare_image_ids, prepare_latents, get_inf_timesteps
 from data import scanpath_over_pil_image
 
@@ -13,6 +13,8 @@ from diffusers.training_utils import compute_density_for_timestep_sampling
 import bitsandbytes as bnb
 from peft import LoraConfig
 from torchvision.transforms import functional as TF
+
+
 
 def ids_encode_pad_mask_images(model, images, dtype):
     with torch.autocast(device_type='cuda', enabled=True, dtype=dtype):
@@ -68,7 +70,7 @@ def get_loss(model, images, scanpaths, config,
             if config.shift_timesteps_resolution:
                 mus = []
                 for sample_ind in range(noise.shape[0]):
-                   mu = compute_empirical_mu(latents_there_mask[sample_ind].amax(-1).sum(0), 4)
+                   mu = calculate_shift(latents_there_mask[sample_ind].amax(-1).sum(0), )
                    mus.append(mu)
                 mus = torch.tensor(mus).to(u.device, u.dtype)
                 u = torch.exp(mus) / (torch.exp(mus) + (1 / u - 1) ** 1)
