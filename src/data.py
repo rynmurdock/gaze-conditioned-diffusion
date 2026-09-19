@@ -260,7 +260,6 @@ def collate_scanpaths(batch):
         l_scanpaths_sans_contents = []
         for b in batch:
             scanpath_sans_contents = scanpath_over_pil_image(b['scanpath'], h=b['pil_img'].height, w=b['pil_img'].width, just_path=True)
-            scanpath_sans_contents = TF.to_tensor(scanpath_sans_contents) * 2 - 1
             l_scanpaths_sans_contents.append(scanpath_sans_contents)
 
         lengths = torch.tensor([b["length"] for b in batch], dtype=torch.long)
