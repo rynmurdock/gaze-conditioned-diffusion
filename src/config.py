@@ -80,7 +80,7 @@ class Config:
     ### Logging
     exp_name: str = None
     save_path: str = './'
-    freq: int = 500 # how often we save/log/etc.
+    freq: int = 100 # how often we save/log/etc.
 
     def to_json(self, filename):
         # we don't want to mutate our actual class
