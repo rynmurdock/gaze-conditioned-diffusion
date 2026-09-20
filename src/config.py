@@ -14,7 +14,7 @@ class Config:
     # model_path = None
     transformer_model_path = None
     lora_path = None
-    seed: int = 14
+    seed: int = 11
 
     #### seems consistently better to keep text encoder; use edit image
     remove_text_encoder: bool = False
@@ -36,7 +36,7 @@ class Config:
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 4
+    batch_size: int = 8
     lr: float = 1e-5
     use_prompt: str = 'The scene.'
 

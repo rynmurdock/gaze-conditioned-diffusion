@@ -6,7 +6,7 @@ from copy import deepcopy
 from modeling.image_cfg_pipe_modded_klein import ImageCFGFlux2KleinPipeline, compute_empirical_mu, calculate_shift, get_inf_timesteps
 from data import scanpath_over_pil_image
 
-from diffusers import BitsAndBytesConfig
+from diffusers import BitsAndBytesConfig, Flux2Transformer2DModel
 from diffusers.training_utils import compute_density_for_timestep_sampling
 import bitsandbytes as bnb
 from peft import LoraConfig
@@ -99,10 +99,10 @@ def get_loss(model, images, scanpaths, config,
             latent_image_ids = torch.cat([noisy_image_ids, hint_ids], dim=1)
 
         assert torch.equal(hint_ids, typical_image_ids), (
-            f'Not equal: {hint_ids} {typical_image_ids}'
+            f'Should be equal: {hint_ids} != {typical_image_ids}'
         )
         assert not torch.equal(hint_ids, noisy_image_ids), (
-            f'Should not be equal: {hint_ids} {typical_image_ids}'
+            f'Should not be equal: {hint_ids} == {typical_image_ids}'
         )
 
         output = model(latents if not scanpath_as_edit_image else latent_model_input, 
