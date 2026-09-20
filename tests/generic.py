@@ -1,5 +1,5 @@
 '''
-python tests/generic.py
+python -m tests.generic
 '''
 
 import sys

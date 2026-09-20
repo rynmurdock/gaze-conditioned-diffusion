@@ -10,7 +10,8 @@ fixations that used to land in the (now-removed) gray margin will
 appear off-image - and this should correlate with each image's actual
 on-disk size, NOT be random per-subject noise.
 
-Run: python check_cat2000_padding.py
+Run: 
+python -m tests.cat2000_resolutions_test
 """
 
 import os

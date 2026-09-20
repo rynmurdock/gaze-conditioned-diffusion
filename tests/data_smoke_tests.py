@@ -5,7 +5,7 @@ line up (as opposed to being in some other coordinate space, e.g. a
 letterboxed screen canvas).
 
 Run:
-    python -m tests.data_smoke_tests
+python -m tests.data_smoke_tests
 """
 
 import os
