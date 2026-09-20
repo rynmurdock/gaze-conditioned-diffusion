@@ -13,7 +13,7 @@ class Config:
     ### Model
     # model_path = None
     transformer_model_path = None
-    lora_path = None
+    lora_path = '/root/gaze-conditioned-diffusion/logs/helianthin_Touchet_Hyper-uranian/10400_ckpt/pytorch_lora_weights.safetensors'
     seed: int = 11
 
     #### seems consistently better to keep text encoder; use edit image
@@ -22,7 +22,7 @@ class Config:
     scanpath_as_edit_image: bool = True
     ####
 
-    lora_rank: int = 64
+    lora_rank: int = 128
     sample_teacher: bool = True
 
     just_inf_timesteps: bool = False
@@ -36,8 +36,8 @@ class Config:
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 16
-    lr: float = 1e-5
+    batch_size: int = 8
+    lr: float = 1e-4
     use_prompt: str = 'The scene.'
 
     # teacher gives the input image back in most cases
@@ -51,7 +51,7 @@ class Config:
 
     # this seems to break after d5b46746eb7f329c793d65b76a09c96ef9bfdd97
     # likely due to dynamic shapes being borked on some torch versions
-    do_compile: bool = False
+    do_compile: bool = True
     device: str = 'cuda:0'
     
     # specifically for *mixed precision*

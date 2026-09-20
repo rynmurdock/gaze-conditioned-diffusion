@@ -126,7 +126,7 @@ def get_loss(model, images, scanpaths, config,
     # mask anywhere we don't have contents
     loss[~latents_there_mask] = 0
     # mean over batch last
-    loss = loss.flatten(1).mean(1).mean()
+    loss = loss.flatten(1).sum(1).mean()
 
     logging_dict = {'mse_loss': loss.item(),}
     return loss, logging_dict
