@@ -13,7 +13,7 @@ class Config:
     ### Model
     # model_path = None
     transformer_model_path = None
-    lora_path = '/root/gaze-conditioned-diffusion/logs/helianthin_Touchet_Hyper-uranian/10400_ckpt/pytorch_lora_weights.safetensors'
+    lora_path = None
     seed: int = 11
 
     #### seems consistently better to keep text encoder; use edit image
@@ -36,7 +36,7 @@ class Config:
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 8
+    batch_size: int = 32
     lr: float = 1e-4
     use_prompt: str = 'The scene.'
 
@@ -57,7 +57,7 @@ class Config:
     # specifically for *mixed precision*
     # we parse torch dtypes to str on saving & then back on loading for simplicity
     dtype: torch.dtype = field(default=torch.bfloat16, repr=False)
-    activation_checkpointing: bool = False
+    activation_checkpointing: bool = True
 
     ### Data
     # TODO could un-invert intverted subset for addditional right-side-up data
