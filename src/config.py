@@ -52,7 +52,7 @@ class Config:
 
     # this seems to break after d5b46746eb7f329c793d65b76a09c96ef9bfdd97
     # likely due to dynamic shapes being borked on some torch versions
-    do_compile: bool = True
+    do_compile: bool = False
     device: str = 'cuda:0'
     
     # specifically for *mixed precision*

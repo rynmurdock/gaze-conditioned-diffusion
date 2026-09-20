@@ -141,7 +141,7 @@ def get_loss(model, images, scanpaths, config,
             latent_image_ids = torch.cat([noisy_image_ids, hint_ids], dim=1)
             if config.sample_full_trajectory:
                 timesteps = get_inf_timesteps(model.pipe.scheduler, x0, num_inference_steps=4, device='cuda',)
-                timesteps = timesteps[ind][None]
+                timesteps = timesteps[ind][None].expand(len(latent_model_input))
 
             output = model(latent_model_input, 
                         timesteps=timesteps, image_ids=latent_image_ids,
