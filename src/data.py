@@ -259,7 +259,7 @@ def collate_scanpaths(batch):
         # we can just take the max to get our scanpath images
         l_scanpaths_sans_contents = []
         for b in batch:
-            scanpath_sans_contents = scanpath_over_pil_image(b['scanpath'], h=b['pil_img'].height, w=b['pil_img'].width, just_path=True)
+            scanpath_sans_contents = scanpath_over_pil_image(b['scanpath'], b['pil_img'], just_path=True)
             l_scanpaths_sans_contents.append(scanpath_sans_contents)
 
         lengths = torch.tensor([b["length"] for b in batch], dtype=torch.long)
@@ -292,7 +292,6 @@ def get_dataloader(
         config,
         ):
     # root should contain a `Stimuli/` subfolder (e.g. Stimuli/Action/001.jpg)
-    
     dataset = ScanpathDataset(
         root=data_path,
         mat_path=f"{data_path}/allFixData.mat",

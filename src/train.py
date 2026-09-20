@@ -116,7 +116,6 @@ Training {len(trained_params)} torch modules
                     train_losses = []
                     validation_losses = []
 
-
             loss, loss_logging_dict = get_loss(model, images, scanpaths, config=config,
                                                scanpath_sans_contents=batch.get('scanpath_sans_contents'))
             inner_train_losses.append(loss.item())
@@ -133,7 +132,8 @@ Training {len(trained_params)} torch modules
                     model.pipe.transformer.save_lora_adapter(f'{config.log_dir}/{total_inds}_ckpt/', 
                                                              adapter_name='default')
                 else:
-                    model.pipe.transformer.save_pretrained(f'{config.log_dir}/{total_inds}_ckpt/', from_pt=True)
+                    model.pipe.transformer.save_pretrained(f'{config.log_dir}/{total_inds}_ckpt/', 
+                                                             from_pt=True)
 
 if __name__ == '__main__':
     main(main_config)

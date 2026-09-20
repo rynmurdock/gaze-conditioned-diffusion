@@ -25,7 +25,7 @@ def ids_encode_pad_mask_images(model, images, dtype):
             latent = model.pipe._encode_vae_image(img_tensor, None)
             # prepare_image_latents != prepare_latent_ids -- 
             #   former gives a shift as they're each a cond image
-            _, imids = model.pipe.prepare_image_latents(images=[img_tensor], generator=None, batch_size=1, device=latent.device, dtype=dtype)
+            imids = ImageCFGFlux2KleinPipeline._prepare_image_ids([latent],).to(latent.device)
             latids = ImageCFGFlux2KleinPipeline._prepare_latent_ids(latent).to(latent.device)
             image_ids.append(imids[0])
             latent_ids.append(latids[0])
@@ -212,7 +212,6 @@ class Zoo(torch.nn.Module):
         image = self.pipe(
                 # just smuggling for our image ids
                 image=cond_image if self.config.scanpath_as_edit_image else None,
-                latents=scanpath if not self.config.scanpath_as_edit_image else None,
                 num_inference_steps=4,
                 guidance_scale=guidance_scale,
                 prompt_embeds=prompt_embeds,
@@ -245,7 +244,7 @@ class Zoo(torch.nn.Module):
         logging.info(f'\nRunning validation for max {max_val_steps}\n')
         # fork_rng temporarily isolates changes
         with torch.random.fork_rng():
-            # You can change the seed here locally
+            # so you can change the seed here locally
             torch.manual_seed(self.seed)
 
             losses = []
@@ -289,7 +288,7 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
                                                            quantization_config=BitsAndBytesConfig(load_in_8bit=True,) if config.quantize_model else None,
                                                            strict=False)
     target_modules = [
-                "to_q", "to_k", "to_v", "to_out.0",          # double-stream attention
+                "to_q", "to_k", "to_v", "to_out.0",             # double-stream attention
                 "add_q_proj", "add_k_proj", "add_v_proj", "to_add_out",  # double-stream cross/context attention
                 "to_qkv_mlp_proj.0",                            # single-stream fused qkv+mlp-in
                 "to_out.0",                                     # single-stream fused attn-out+mlp-out
@@ -301,7 +300,6 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
                                       target_modules=target_modules
                                       )
         transformer.set_adapters('default', 1)
-        
     elif config.lora_rank:
         # we need a new lora as we aren't loading one
         # inplace operation
