@@ -37,7 +37,7 @@ class Config:
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 4
+    batch_size: int = 8
     lr: float = 1e-4
     use_prompt: str = 'The scene.'
 

@@ -123,4 +123,4 @@ hparam sweep:
 
 [] cite Reben+Joel, cites for CMMD + lpips + dinoscore
 
-
+[] verify your timesteps make sense here
