@@ -36,7 +36,7 @@ class Config:
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 32
+    batch_size: int = 8
     lr: float = 1e-5
     use_prompt: str = 'The scene.'
 
@@ -57,7 +57,7 @@ class Config:
     # specifically for *mixed precision*
     # we parse torch dtypes to str on saving & then back on loading for simplicity
     dtype: torch.dtype = field(default=torch.bfloat16, repr=False)
-    activation_checkpointing: bool = True
+    activation_checkpointing: bool = False
 
     ### Data
     # TODO could un-invert intverted subset for addditional right-side-up data
