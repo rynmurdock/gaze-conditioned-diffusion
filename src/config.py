@@ -36,8 +36,8 @@ class Config:
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 16
-    lr: float = 1e-4
+    batch_size: int = 4
+    lr: float = 1e-5
     use_prompt: str = 'The scene.'
 
     # teacher gives the input image back in most cases

@@ -3,9 +3,7 @@ import logging
 from tqdm import tqdm
 from copy import deepcopy
 
-from modeling.pipe_modded_klein import Flux2KleinPipeline
-from modeling.image_cfg_pipe_modded_klein import ImageCFGFlux2KleinPipeline, compute_empirical_mu, calculate_shift
-from modeling.modded_klein import Flux2Transformer2DModel, prepare_image_ids, prepare_latents, get_inf_timesteps
+from modeling.image_cfg_pipe_modded_klein import ImageCFGFlux2KleinPipeline, compute_empirical_mu, calculate_shift, get_inf_timesteps
 from data import scanpath_over_pil_image
 
 from diffusers import BitsAndBytesConfig
@@ -25,8 +23,10 @@ def ids_encode_pad_mask_images(model, images, dtype):
             img_tensor = TF.to_tensor(pil_img) * 2 - 1  # (3, H, W), values in [-1, 1]
             img_tensor = img_tensor.to(model.device, dtype)[None]
             latent = model.pipe._encode_vae_image(img_tensor, None)
-            imids = Flux2KleinPipeline._prepare_image_ids([latent]).to(latent.device)
-            latids = Flux2KleinPipeline._prepare_latent_ids(latent).to(latent.device)
+            # prepare_image_latents != prepare_latent_ids -- 
+            #   former gives a shift as they're each a cond image
+            _, imids = model.pipe.prepare_image_latents(images=[img_tensor], generator=None, batch_size=1, device=latent.device, dtype=dtype)
+            latids = ImageCFGFlux2KleinPipeline._prepare_latent_ids(latent).to(latent.device)
             image_ids.append(imids[0])
             latent_ids.append(latids[0])
             latents.append(model.pipe._pack_latents(latent)[0])
@@ -100,6 +100,9 @@ def get_loss(model, images, scanpaths, config,
 
         assert torch.equal(hint_ids, typical_image_ids), (
             f'Not equal: {hint_ids} {typical_image_ids}'
+        )
+        assert not torch.equal(hint_ids, noisy_image_ids), (
+            f'Should not be equal: {hint_ids} {typical_image_ids}'
         )
 
         output = model(latents if not scanpath_as_edit_image else latent_model_input, 
@@ -280,16 +283,6 @@ def add_lora(transformer, rank, target_modules):
 
 @torch.no_grad()
 def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
-    global Flux2KleinPipeline
-    if not config.remove_text_encoder:
-        # we can use the vanilla setup besides our prepare_image_ids in this case
-        from diffusers import Flux2Transformer2DModel, Flux2KleinPipeline
-        # we smuggle in our image ids by overriding both of these & calling scanpath "latents"...
-    
-    if not config.scanpath_as_edit_image:
-        Flux2KleinPipeline.prepare_image_ids = prepare_image_ids
-        Flux2KleinPipeline.prepare_latents = prepare_latents
-
     transformer = Flux2Transformer2DModel.from_pretrained("black-forest-labs/FLUX.2-klein-4B" if path is None
                                                            else path, # we save without a subdir
                                                            subfolder=None if path else 'transformer',

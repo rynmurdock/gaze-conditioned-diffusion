@@ -2,7 +2,6 @@
 python tests/generic.py
 '''
 
-
 import sys
 import logging
 import requests
@@ -12,7 +11,6 @@ from PIL import Image
 from diffusers import Flux2Transformer2DModel
 
 sys.path.append('/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/src/')
-
 
 
 """
@@ -34,8 +32,7 @@ diffusers/models/transformers/transformer_flux2.py):
     img_ids / txt_ids at forward time (kept at 4, same as the real model)
 """
 
-import torch
-from diffusers import Flux2Transformer2DModel
+
 
 TINY_CONFIG = dict(
     patch_size=1,
@@ -81,7 +78,7 @@ def test_attention_mask_and_batched_rope():
         return_dict=False,
     )[0]
 
-    from modeling.klein_batched_rope import batchify_transformer_rope
+    from src.modeling.klein_batched_rope import batchify_transformer_rope
     transformer = batchify_transformer_rope(transformer)
 
     two_latents = torch.randn((1, 18, 16,), device='cpu', dtype=torch.bfloat16)
