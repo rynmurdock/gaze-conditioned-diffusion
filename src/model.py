@@ -141,7 +141,12 @@ def get_loss(model, images, scanpaths, config,
             latent_image_ids = torch.cat([noisy_image_ids, hint_ids], dim=1)
             if config.sample_full_trajectory:
                 timesteps = get_inf_timesteps(model.pipe.scheduler, x0, num_inference_steps=4, device='cuda',)
-                timesteps = timesteps[ind][None].expand(len(latent_model_input))
+                # TODO must consider & update this
+                # print(timesteps)
+                if ind < len(timesteps):
+                    timesteps = timesteps[ind][None]
+                else:
+                    timesteps = torch.zeros_like(timesteps[0][None])
 
             output = model(latent_model_input, 
                         timesteps=timesteps, image_ids=latent_image_ids,
@@ -159,7 +164,7 @@ def get_loss(model, images, scanpaths, config,
             loss[~latents_there_mask] = 0
             # mean over batch last
             loss = loss.flatten(1).sum(1).mean()
-            grand_loss += loss
+            grand_loss += loss.detach()
 
     logging_dict = {'mse_loss': grand_loss.item(),}
     return grand_loss, logging_dict
@@ -203,6 +208,8 @@ class Zoo(torch.nn.Module):
         latents_attention_mask = latents_attention_mask.sum(-1)
         attention_mask = torch.nn.functional.pad(latents_attention_mask, 
                                                  (prompt_embeds.shape[1], 0,), value=1) != 0.
+        if len(prompt_embeds) == 1 and len(prompt_embeds) != len(latents):
+            prompt_embeds = prompt_embeds.repeat(len(latents), 1, 1)
 
         velocity = self.pipe.transformer(
                 hidden_states=latents,  # (B, image_seq_len, C)
