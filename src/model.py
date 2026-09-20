@@ -98,6 +98,13 @@ def get_loss(model, images, scanpaths, config,
             latent_model_input = torch.cat([latents, hint_latents], dim=1).to(model.pipe.transformer.dtype)
             latent_image_ids = torch.cat([noisy_image_ids, hint_ids], dim=1)
 
+        assert torch.equal(hint_ids, typical_image_ids), (
+            f'Should be equal: {hint_ids} != {typical_image_ids}'
+        )
+        assert not torch.equal(hint_ids, noisy_image_ids), (
+            f'Should not be equal: {hint_ids} == {typical_image_ids}'
+        )
+
         output = model(latents if not scanpath_as_edit_image else latent_model_input, 
                        timesteps=timesteps, image_ids=latent_image_ids,
                        prompt_embeds=model.pipe.cached_prompt,

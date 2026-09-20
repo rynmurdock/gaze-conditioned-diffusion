@@ -22,7 +22,7 @@ class Config:
     scanpath_as_edit_image: bool = True
     ####
 
-    lora_rank: int = 128
+    lora_rank: int = 64
     sample_teacher: bool = True
 
     just_inf_timesteps: bool = False
@@ -36,13 +36,13 @@ class Config:
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 8
+    batch_size: int = 16
     lr: float = 1e-5
     use_prompt: str = 'The scene.'
 
     # teacher gives the input image back in most cases
     #   sans instruction
-    teacher_use_prompt: str = 'Return the image without changes.'
+    teacher_use_prompt: str = ''
 
     ### Training
     epochs: int = 3000000000000

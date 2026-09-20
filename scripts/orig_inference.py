@@ -24,8 +24,8 @@ from PIL import Image
 
 image = pipe(
     prompt='',
-    height=512,
-    width=512,
+    height=384,
+    width=768,
     guidance_scale=1.0,
     image=Image.open('/root/gaze-conditioned-diffusion/trainSet/Stimuli/Art/005.jpg'),
     num_inference_steps=4,
