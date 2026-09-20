@@ -23,6 +23,7 @@ class Config:
     ####
 
     lora_rank: int = 128
+    sample_full_trajectory: bool = True
     sample_teacher: bool = True
 
     just_inf_timesteps: bool = False

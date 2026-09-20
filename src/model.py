@@ -39,18 +39,18 @@ def ids_encode_pad_mask_images(model, images, dtype):
 
 
 @torch.no_grad()
-def full_teacher_trajectory(x0, latent_image_ids, latents_there_mask):
+def full_teacher_trajectory(model, x0, latent_image_ids, latents_there_mask):
     model.pipe.transformer.disable_lora()
 
     timesteps = get_inf_timesteps(model.pipe.scheduler, x0, num_inference_steps=4, device='cuda',)
-    randn_latents = torch.randn_like(x0)
-    teacher_latents_l = [randn_latents]
+    latents = torch.randn_like(x0)
+    teacher_latents_l = [latents]
     teacher_preds = []
 
     for t in timesteps:
         latent_model_input = torch.cat([latents, x0], dim=1).to(model.pipe.transformer.dtype)
         teacher_noise_pred = model(latent_model_input, 
-                    timesteps=t, image_ids=latent_image_ids, 
+                    timesteps=t[None], image_ids=latent_image_ids, 
                     prompt_embeds=model.pipe.cached_teacher_prompt,
                     txt_ids=model.pipe.cached_teacher_txt_ids,
                     latents_attention_mask=latents_there_mask.repeat(1, 2, 1),
@@ -81,7 +81,7 @@ def get_loss(model, images, scanpaths, config,
         hint_latents[hint_drop_mask] = 0
 
         if config.sample_full_trajectory:
-            inputs, targets = full_teacher_trajectory(x0, teacher_latent_image_ids, 
+            inputs, targets = full_teacher_trajectory(model, x0, teacher_latent_image_ids, 
                                                                     latents_there_mask)
         else:
             noise = torch.randn_like(x0)
@@ -100,10 +100,10 @@ def get_loss(model, images, scanpaths, config,
                 if config.shift_timesteps_resolution:
                     mus = []
                     for sample_ind in range(noise.shape[0]):
-                    mu = calculate_shift(latents_there_mask[sample_ind].amax(-1).sum(0), )
-                    mus.append(mu)
-                    mus = torch.tensor(mus).to(u.device, u.dtype)
-                    u = torch.exp(mus) / (torch.exp(mus) + (1 / u - 1) ** 1)
+                        mu = calculate_shift(latents_there_mask[sample_ind].amax(-1).sum(0), )
+                        mus.append(mu)
+                        mus = torch.tensor(mus).to(u.device, u.dtype)
+                        u = torch.exp(mus) / (torch.exp(mus) + (1 / u - 1) ** 1)
                 indices = (u * model.noise_scheduler_copy.config.num_train_timesteps).long()
                 timesteps = model.noise_scheduler_copy.timesteps[indices].to(device=x0.device)
             sigma = timesteps.view(-1, 1, 1) / 1000
@@ -136,9 +136,12 @@ def get_loss(model, images, scanpaths, config,
                 inputs = [latents]; targets = [noise - x0]
             else:
                 inputs = [latents]; targets = [teacher_noise_pred]
-        for into, outto in zip(inputs, targets):
+        for into, target, ind in zip(inputs, targets, range(len(targets))):
             latent_model_input = torch.cat([into, hint_latents], dim=1).to(model.pipe.transformer.dtype)
             latent_image_ids = torch.cat([noisy_image_ids, hint_ids], dim=1)
+            if config.sample_full_trajectory:
+                timesteps = get_inf_timesteps(model.pipe.scheduler, x0, num_inference_steps=4, device='cuda',)
+                timesteps = timesteps[ind][None]
 
             output = model(latent_model_input, 
                         timesteps=timesteps, image_ids=latent_image_ids,
@@ -147,7 +150,7 @@ def get_loss(model, images, scanpaths, config,
                         latents_attention_mask=latents_there_mask.repeat(1, 2, 1),
                         )
 
-            output = output[:, : latents.size(1) :]
+            output = output[:, : into.size(1) :]
 
             output = output.to(torch.float32)
             target = target.to(torch.float32)
