@@ -22,7 +22,7 @@ class Config:
     scanpath_as_edit_image: bool = True
     ####
 
-    lora_rank: int = 32
+    lora_rank: int = 128
     sample_teacher: bool = True
 
     # this overrides all else; samples a full trajectory instead of pairs
@@ -39,8 +39,8 @@ class Config:
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 16
-    lr: float = 5e-6
+    batch_size: int = 1
+    lr: float = 4e-6
     use_prompt: str = 'The scene.'
 
     # teacher gives the input image back in most cases
@@ -50,7 +50,6 @@ class Config:
     ### Training
     epochs: int = 3000000000000
     max_steps: int = 100_000
-    # TODO 64
     max_val_steps: int = 64
 
     # this seems to break after d5b46746eb7f329c793d65b76a09c96ef9bfdd97
@@ -61,7 +60,7 @@ class Config:
     # specifically for *mixed precision*
     # we parse torch dtypes to str on saving & then back on loading for simplicity
     dtype: torch.dtype = field(default=torch.bfloat16, repr=False)
-    activation_checkpointing: bool = True
+    activation_checkpointing: bool = False
 
     ### Data
     # TODO could un-invert intverted subset for addditional right-side-up data
@@ -84,7 +83,7 @@ class Config:
     ### Logging
     exp_name: str = None
     save_path: str = './'
-    freq: int = 50 # how often we save/log/etc.
+    freq: int = 500 # how often we save/log/etc.
 
     def to_json(self, filename):
         # we don't want to mutate our actual class
