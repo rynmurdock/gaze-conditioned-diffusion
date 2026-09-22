@@ -22,11 +22,11 @@ class Config:
     scanpath_as_edit_image: bool = True
     ####
 
-    lora_rank: int = 64
+    lora_rank: int = 32
     sample_teacher: bool = True
 
-    # this overrides all else; samples a full trajectory instead of pairs
-    sample_full_trajectory: bool = False
+    # this overrides all else; samples a full trajectory instead of i/o pairs
+    sample_full_trajectory: bool = True
 
     just_inf_timesteps: bool = False
     timestep_density_fn: str = 'logit_normal'
@@ -39,8 +39,8 @@ class Config:
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 32
-    lr: float = 5e-6
+    batch_size: int = 8
+    lr: float = 1e-6
     use_prompt: str = 'The scene.'
 
     # teacher gives the input image back in most cases
