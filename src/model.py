@@ -61,7 +61,7 @@ def full_teacher_trajectory(model, x0, latent_image_ids, latents_there_mask):
             t_a = timesteps[:, t+1] 
         else:
             t_a = 0
-        latents = latents + (t_a - timesteps[:, t])[:, None, None,] * teacher_noise_pred
+        latents = latents + (t_a/1000 - timesteps[:, t]/1000)[:, None, None,] * teacher_noise_pred
 
         teacher_latents_l.append(latents)
         teacher_preds.append(teacher_noise_pred)

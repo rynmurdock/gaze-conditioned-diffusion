@@ -80,7 +80,7 @@ def run_eval(
         path='/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/provincialization_Demopolis_Phiona/',
         lora_path=f'/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/provincialization_Demopolis_Phiona/66000_ckpt/pytorch_lora_weights.safetensors',
         n_samples=64,
-        guidance_scales=[1, 1.1, 3, 3.5, 4, 4.5, 5, 6],
+        guidance_scales=[3, 4, 5, 6],
         step=None,
         job_n=None,
     ):
@@ -118,10 +118,10 @@ def run_eval(
             gt_image = sample['pil_images'][0]
             for ind in guidance_scales:
                 # saving into cmmd so I can use their existing structure of loading from disk
-                pred_this_cmmd_dir = f'pred_scratch_cmmd_{ind}_{step}_{job_n}/'
+                pred_this_cmmd_dir = f'scratch/pred_scratch_cmmd_{ind}_{step}_{job_n}/'
                 # not strictly necessary (dataloader shouldn't vary) 
                 #   but using multiple folders in case
-                gt_this_cmmd_dir = f'gt_scratch_cmmd_{ind}_{step}_{job_n}/'
+                gt_this_cmmd_dir = f'scratch/gt_scratch_cmmd_{ind}_{step}_{job_n}/'
                 os.makedirs(pred_this_cmmd_dir, exist_ok=True)
                 os.makedirs(gt_this_cmmd_dir, exist_ok=True)
 
@@ -147,8 +147,8 @@ def run_eval(
 
     cmmd_scores = {}
     for ind in guidance_scales:
-        pred_this_cmmd_dir = f'pred_scratch_cmmd_{ind}_{step}_{job_n}/'
-        gt_this_cmmd_dir = f'gt_scratch_cmmd_{ind}_{step}_{job_n}/'
+        pred_this_cmmd_dir = f'scratch/pred_scratch_cmmd_{ind}_{step}_{job_n}/'
+        gt_this_cmmd_dir = f'scratch/gt_scratch_cmmd_{ind}_{step}_{job_n}/'
 
         metric = logic.CMMD(data_parallel=True, device_ids=[0])
         score_cmmd = metric.execute(pred_this_cmmd_dir, gt_this_cmmd_dir)
@@ -190,12 +190,12 @@ if __name__ == "__main__":
     from utils.eval_utils import get_dinoscore, get_lpips
 
     # path to lora
-    to_job = '''/root/gaze-conditioned-diffusion/logs/drumble-drone_Ascenez_Yang'''.splitlines()
+    to_job = '''/root/gaze-conditioned-diffusion/logs/triplexity_Nelrsa_Varginha'''.splitlines()
 
 
     ckpts_to_scores = {}
     for jn, e in enumerate(to_job):
-        for step in [5000, 10000, 15000, 20000]:
+        for step in [1250]:
             job_path, ckpt_step_path = e, f'{e}/{step}_ckpt/pytorch_lora_weights.safetensors'
             min_lpips, min_cmmd, max_dino = run_eval(job_path, ckpt_step_path, job_n=jn, step=step)
             ckpts_to_scores[ckpt_step_path] = {

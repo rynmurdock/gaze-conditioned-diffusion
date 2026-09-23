@@ -13,7 +13,7 @@ class Config:
     ### Model
     # model_path = None
     transformer_model_path = None
-    lora_path = None
+    lora_path = '/root/gaze-conditioned-diffusion/logs/irreflectively_Prisilla_Lepidostei/450_ckpt/pytorch_lora_weights.safetensors'
     seed: int = 12
 
     #### seems consistently better to keep text encoder; use edit image
@@ -40,7 +40,7 @@ class Config:
 
     ### Hparams
     batch_size: int = 16
-    lr: float = 1e-5
+    lr: float = 8e-4
     use_prompt: str = 'The scene.'
 
     # teacher gives the input image back in most cases
@@ -54,7 +54,7 @@ class Config:
 
     # this seems to break after d5b46746eb7f329c793d65b76a09c96ef9bfdd97
     # likely due to dynamic shapes being borked on some torch versions
-    do_compile: bool = True
+    do_compile: bool = False
     device: str = 'cuda:0'
     
     # specifically for *mixed precision*
@@ -65,7 +65,7 @@ class Config:
     ### Data
     # TODO could un-invert intverted subset for addditional right-side-up data
     included_data_subsets: tuple[str] = ('Art', 'Affective', 'Action',
-                                         'BlackWhite', 'Fractal', 'Indoor',
+                                         'BlackWhite', 'Indoor',
                                          'Inverted', 'OutdoorManMade', 'OutdoorNatural',
                                          'Random', 'Social')
     # we use this for excluding specific low-resolution samples in "Art" here
