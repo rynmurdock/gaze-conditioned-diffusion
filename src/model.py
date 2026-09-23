@@ -56,21 +56,18 @@ def full_teacher_trajectory(model, x0, latent_image_ids, latents_there_mask):
                     latents_attention_mask=latents_there_mask.repeat(1, 2, 1),
                     )
         teacher_noise_pred = teacher_noise_pred[:, : latents.size(1) :]
-
-        # t could differ by mu, so step each one in batch
-        #   this is horrible design (TODO refactor to more fns or do lerp yourself) 
-        #   but I'd need to add a test to change how I step.
-        stepped_latents = []
-        for ind in range(len(teacher_noise_pred)):
-            l = model.noise_scheduler_copy.step(teacher_noise_pred[ind, None], timesteps[ind, t, None], latents, return_dict=False)[0]
-            stepped_latents.append(l)
-        latents = torch.cat(stepped_latents)
+        # would rather diffusers.step but it is a nightmare in there.
+        if t < timesteps.shape[1]-1:
+            t_a = timesteps[:, t+1] 
+        else:
+            t_a = 0
+        latents = latents + (t_a - timesteps[:, t])[:, None, None,] * teacher_noise_pred
 
         teacher_latents_l.append(latents)
         teacher_preds.append(teacher_noise_pred)
     
     model.pipe.transformer.enable_lora()
-    return teacher_latents_l, teacher_noise_pred
+    return torch.stack(teacher_latents_l, 1), torch.stack(teacher_preds, 1)
 
 
 def get_loss(model, images, scanpaths, config, 
@@ -97,7 +94,7 @@ def get_loss(model, images, scanpaths, config,
             if config.just_inf_timesteps:
                 timesteps = get_inf_timesteps(model.noise_scheduler_copy, latents_there_mask, num_inference_steps=4, device='cuda',)
                 k = torch.randint(0, 4, (noise.shape[0],)).to(x0.device)
-                timesteps = timesteps[:, k]
+                timesteps = timesteps[k]
             else:
                 u = compute_density_for_timestep_sampling(
                     weighting_scheme=config.timestep_density_fn if config.timestep_density_fn else 'logit_normal',
@@ -143,17 +140,18 @@ def get_loss(model, images, scanpaths, config,
 
         if not config.sample_full_trajectory:
             if not sample_teacher:
-                inputs = [latents]; targets = [noise - x0]
+                inputs = latents[:, None]; targets = (noise - x0)[:, None]
             else:
-                inputs = [latents]; targets = [teacher_noise_pred]
-        
-        for into, target, ind in zip(inputs, targets, range(len(targets))):
+                inputs = latents[:, None]; targets = teacher_noise_pred[:, None]
+
+        for ind in range(targets.shape[1]):
+            into = inputs[:, ind]; target = targets[:, ind]
             latent_model_input = torch.cat([into, hint_latents], dim=1).to(model.pipe.transformer.dtype)
             latent_image_ids = torch.cat([noisy_image_ids, hint_ids], dim=1)
 
             if config.sample_full_trajectory:
                 timesteps_set = get_inf_timesteps(model.noise_scheduler_copy, latents_there_mask, num_inference_steps=4, device='cuda',)
-                timesteps = timesteps_set[:, ind]
+                timesteps = timesteps_set[:, ind,]
 
             output = model(latent_model_input, 
                         timesteps=timesteps, image_ids=latent_image_ids,
@@ -161,7 +159,6 @@ def get_loss(model, images, scanpaths, config,
                         txt_ids=model.pipe.cached_txt_ids,
                         latents_attention_mask=latents_there_mask.repeat(1, 2, 1),
                         )
-
             output = output[:, : into.size(1) :]
 
             output = output.to(torch.float32)
