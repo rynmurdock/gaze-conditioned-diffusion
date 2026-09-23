@@ -23,13 +23,15 @@ class Config:
     ####
 
     lora_rank: int = 128
-    sample_teacher: bool = True
 
     # this overrides all else; samples a full trajectory instead of i/o pairs
-    sample_full_trajectory: bool = True
+    sample_full_trajectory: bool = False
+
+    sample_teacher: bool = True
 
     just_inf_timesteps: bool = False
     timestep_density_fn: str = 'logit_normal'
+
     # just_inf_timesteps will automatically already shift, 
     #   so this does nothing if just_inf_timesteps=False
     shift_timesteps_resolution: bool = True

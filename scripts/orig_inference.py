@@ -1,6 +1,6 @@
 '''
 Inference over a typical klein model with visualization of x0 prediction
-python scripts/orig_inference.pyc
+python scripts/orig_inference.py
 '''
 
 import torch
@@ -23,7 +23,7 @@ from PIL import Image
 # prompt = 'a photo of inside a house with five windows'
 
 image = pipe(
-    prompt='',
+    prompt='Return the image as it was given.',
     height=384,
     width=768,
     guidance_scale=1.0,

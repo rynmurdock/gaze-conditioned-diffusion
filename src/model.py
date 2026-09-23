@@ -64,10 +64,10 @@ def full_teacher_trajectory(model, x0, latent_image_ids, latents_there_mask):
         latents = latents + (t_a/1000 - timesteps[:, t]/1000)[:, None, None,] * teacher_noise_pred
 
         teacher_latents_l.append(latents)
-        teacher_preds.append(teacher_noise_pred)
+        teacher_x0s.append(latents - timesteps[:, t]/1000 * teacher_noise_pred)
     
     model.pipe.transformer.enable_lora()
-    return torch.stack(teacher_latents_l, 1), torch.stack(teacher_preds, 1)
+    return torch.stack(teacher_latents_l, 1), torch.stack(teacher_x0s, 1)
 
 
 def get_loss(model, images, scanpaths, config, 
@@ -160,6 +160,10 @@ def get_loss(model, images, scanpaths, config,
                         latents_attention_mask=latents_there_mask.repeat(1, 2, 1),
                         )
             output = output[:, : into.size(1) :]
+
+            # we do x0 weighting when we're going over full trajectories
+            if config.sample_full_trajectory:
+                output = into - timesteps / 1000 * output
 
             output = output.to(torch.float32)
             target = target.to(torch.float32)
