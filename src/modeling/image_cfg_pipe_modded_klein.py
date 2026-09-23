@@ -136,19 +136,24 @@ def retrieve_timesteps(
         timesteps = scheduler.timesteps
     return timesteps, num_inference_steps
 
-def get_inf_timesteps(scheduler, latents, num_inference_steps, device, sigmas=None):
+def get_inf_timesteps(scheduler, latents_there_mask, num_inference_steps, device, sigmas=None):
     sigmas = np.linspace(1.0, 1 / num_inference_steps, num_inference_steps) if sigmas is None else sigmas
     if hasattr(scheduler.config, "use_flow_sigmas") and scheduler.config.use_flow_sigmas:
         sigmas = None
-    image_seq_len = latents.shape[1]
-    mu = compute_empirical_mu(image_seq_len=image_seq_len, num_steps=num_inference_steps)
-    timesteps, num_inference_steps = retrieve_timesteps(
-        scheduler,
-        num_inference_steps,
-        device,
-        sigmas=sigmas,
-        mu=mu,
-    )
+    ts = []
+    for sample_ind in range(latents_there_mask.shape[0]):
+        mu = compute_empirical_mu(latents_there_mask[sample_ind].amax(-1).sum(0), num_inference_steps)
+
+        timesteps, num_inference_steps = retrieve_timesteps(
+            scheduler,
+            num_inference_steps,
+            device,
+            sigmas=sigmas,
+            mu=mu,
+        )
+        ts.append(timesteps)
+    timesteps = torch.stack(ts)
+    assert timesteps.shape[0] == latents_there_mask.shape[0], f'{timesteps.shape} fisrt dim should be == compared to {latents_there_mask.shape}'
     return timesteps
 
 

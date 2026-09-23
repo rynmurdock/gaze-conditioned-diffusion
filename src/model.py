@@ -42,21 +42,30 @@ def ids_encode_pad_mask_images(model, images, dtype):
 def full_teacher_trajectory(model, x0, latent_image_ids, latents_there_mask):
     model.pipe.transformer.disable_lora()
 
-    timesteps = get_inf_timesteps(model.pipe.scheduler, x0, num_inference_steps=4, device='cuda',)
+    timesteps = get_inf_timesteps(model.noise_scheduler_copy, latents_there_mask, num_inference_steps=4, device='cuda',)
     latents = torch.randn_like(x0)
     teacher_latents_l = [latents]
     teacher_preds = []
 
-    for t in timesteps:
+    for t in range(timesteps.shape[1]):
         latent_model_input = torch.cat([latents, x0], dim=1).to(model.pipe.transformer.dtype)
         teacher_noise_pred = model(latent_model_input, 
-                    timesteps=t[None], image_ids=latent_image_ids, 
+                    timesteps=timesteps[:, t, ], image_ids=latent_image_ids, 
                     prompt_embeds=model.pipe.cached_teacher_prompt,
                     txt_ids=model.pipe.cached_teacher_txt_ids,
                     latents_attention_mask=latents_there_mask.repeat(1, 2, 1),
                     )
         teacher_noise_pred = teacher_noise_pred[:, : latents.size(1) :]
-        latents = model.pipe.scheduler.step(teacher_noise_pred, t, latents, return_dict=False)[0]
+
+        # t could differ by mu, so step each one in batch
+        #   this is horrible design (TODO refactor to more fns or do lerp yourself) 
+        #   but I'd need to add a test to change how I step.
+        stepped_latents = []
+        for ind in range(len(teacher_noise_pred)):
+            l = model.noise_scheduler_copy.step(teacher_noise_pred[ind, None], timesteps[ind, t, None], latents, return_dict=False)[0]
+            stepped_latents.append(l)
+        latents = torch.cat(stepped_latents)
+
         teacher_latents_l.append(latents)
         teacher_preds.append(teacher_noise_pred)
     
@@ -86,9 +95,9 @@ def get_loss(model, images, scanpaths, config,
         else:
             noise = torch.randn_like(x0)
             if config.just_inf_timesteps:
-                timesteps = get_inf_timesteps(model.pipe.scheduler, x0, num_inference_steps=4, device='cuda',)
+                timesteps = get_inf_timesteps(model.noise_scheduler_copy, latents_there_mask, num_inference_steps=4, device='cuda',)
                 k = torch.randint(0, 4, (noise.shape[0],)).to(x0.device)
-                timesteps = timesteps[k]
+                timesteps = timesteps[:, k]
             else:
                 u = compute_density_for_timestep_sampling(
                     weighting_scheme=config.timestep_density_fn if config.timestep_density_fn else 'logit_normal',
@@ -99,6 +108,7 @@ def get_loss(model, images, scanpaths, config,
                 # shift per sample using its mask for seq len of non-padding
                 if config.shift_timesteps_resolution:
                     mus = []
+                    # NOTE this ditches compute_empirical_mu
                     for sample_ind in range(noise.shape[0]):
                         mu = calculate_shift(latents_there_mask[sample_ind].amax(-1).sum(0), )
                         mus.append(mu)
@@ -136,17 +146,14 @@ def get_loss(model, images, scanpaths, config,
                 inputs = [latents]; targets = [noise - x0]
             else:
                 inputs = [latents]; targets = [teacher_noise_pred]
+        
         for into, target, ind in zip(inputs, targets, range(len(targets))):
             latent_model_input = torch.cat([into, hint_latents], dim=1).to(model.pipe.transformer.dtype)
             latent_image_ids = torch.cat([noisy_image_ids, hint_ids], dim=1)
+
             if config.sample_full_trajectory:
-                timesteps = get_inf_timesteps(model.pipe.scheduler, x0, num_inference_steps=4, device='cuda',)
-                # TODO must consider & update this
-                # print(timesteps)
-                if ind < len(timesteps):
-                    timesteps = timesteps[ind][None]
-                else:
-                    timesteps = torch.zeros_like(timesteps[0][None])
+                timesteps_set = get_inf_timesteps(model.noise_scheduler_copy, latents_there_mask, num_inference_steps=4, device='cuda',)
+                timesteps = timesteps_set[:, ind]
 
             output = model(latent_model_input, 
                         timesteps=timesteps, image_ids=latent_image_ids,

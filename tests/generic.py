@@ -51,8 +51,7 @@ TINY_CONFIG = dict(
     guidance_embeds=False,
 )
 
-def build_stub_transformer(seed: int = 0) -> Flux2Transformer2DModel:
-    torch.manual_seed(seed)
+def build_stub_transformer() -> Flux2Transformer2DModel:
     model = Flux2Transformer2DModel(**TINY_CONFIG)
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Stub Flux2Transformer2DModel built: {n_params:,} params")
@@ -61,7 +60,6 @@ def build_stub_transformer(seed: int = 0) -> Flux2Transformer2DModel:
 def test_attention_mask_and_batched_rope():
     transformer = build_stub_transformer().to('cpu', torch.bfloat16)
     
-    torch.manual_seed(7)
     latents = torch.randn((1, 7, 16,), device='cpu', dtype=torch.bfloat16)
     timesteps = torch.randint(0, 1000, (1,)).to(latents.device, latents.dtype)
     p_embs = torch.randn((1, 4, 4)).to(latents.device, latents.dtype)
@@ -164,6 +162,21 @@ def test_attention_mask_and_batched_rope():
     batch_size_3_out_diff_padding = batch_size_3_out_diff_padding[:, : latents.size(1) :]
     assert not torch.equal(batch_size_3_out_diff_latents, batch_size_3_out_diff_padding), (batch_size_3_out - batch_size_3_out_diff_padding).abs().max()
 
+    two_out = transformer(
+                    hidden_states=two_latents,
+                    timestep=two_timesteps / 1000,
+                    guidance=None,
+                    encoder_hidden_states=two_p_embs,
+                    txt_ids=two_txt_ids,
+                    img_ids=two_img_ids,
+                    return_dict=False,
+                  )[0]
+
+    assert torch.allclose(
+        two_out,
+        batch_size_3_out[1, :two_out.shape[1]],
+    ), (two_out - batch_size_3_out[1, :two_out.shape[1]]).abs().max()
+
 
 def test_dinoscore():
     from utils.eval_utils import pil_to_n1_1_tensor, get_dinoscore
@@ -183,7 +196,6 @@ def test_dinoscore():
                     f'Metric is {abs(metric - 0.770)} away from known good')
 
 # test_dinoscore()
-
 test_attention_mask_and_batched_rope()
 
 print('''\n\n

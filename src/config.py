@@ -14,7 +14,7 @@ class Config:
     # model_path = None
     transformer_model_path = None
     lora_path = None
-    seed: int = 11
+    seed: int = 12
 
     #### seems consistently better to keep text encoder; use edit image
     remove_text_encoder: bool = False
@@ -22,7 +22,7 @@ class Config:
     scanpath_as_edit_image: bool = True
     ####
 
-    lora_rank: int = 32
+    lora_rank: int = 128
     sample_teacher: bool = True
 
     # this overrides all else; samples a full trajectory instead of i/o pairs
@@ -40,7 +40,7 @@ class Config:
 
     ### Hparams
     batch_size: int = 8
-    lr: float = 1e-6
+    lr: float = 4e-6
     use_prompt: str = 'The scene.'
 
     # teacher gives the input image back in most cases
@@ -54,7 +54,7 @@ class Config:
 
     # this seems to break after d5b46746eb7f329c793d65b76a09c96ef9bfdd97
     # likely due to dynamic shapes being borked on some torch versions
-    do_compile: bool = True
+    do_compile: bool = False
     device: str = 'cuda:0'
     
     # specifically for *mixed precision*
@@ -81,7 +81,7 @@ class Config:
     fixed_resolution: bool = False
 
     ### Logging
-    exp_name: str = None
+    exp_name: str = 'bs_8'
     save_path: str = './'
     freq: int = 50 # how often we save/log/etc.
 
