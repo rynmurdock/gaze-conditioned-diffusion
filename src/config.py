@@ -81,7 +81,7 @@ class Config:
     fixed_resolution: bool = False
 
     ### Logging
-    exp_name: str = 'bs_8'
+    exp_name: str = None
     save_path: str = './'
     freq: int = 50 # how often we save/log/etc.
 
