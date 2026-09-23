@@ -1,6 +1,6 @@
 '''
 Inference over a typical klein model with visualization of x0 prediction
-python scripts/orig_inference.py
+python scripts/orig_inference.pyc
 '''
 
 import torch

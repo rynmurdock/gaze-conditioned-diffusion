@@ -58,7 +58,7 @@ def full_teacher_trajectory(model, x0, latent_image_ids, latents_there_mask):
         teacher_noise_pred = teacher_noise_pred[:, : latents.size(1) :]
         # would rather diffusers.step but it is a nightmare in there.
         if t < timesteps.shape[1]-1:
-            t_a = timesteps[:, t+1] 
+            t_a = timesteps[:, t+1]
         else:
             t_a = 0
         latents = latents + (t_a/1000 - timesteps[:, t]/1000)[:, None, None,] * teacher_noise_pred
