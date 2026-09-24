@@ -96,6 +96,9 @@ Training {len(trained_params)} torch modules
                 # NOTE autocasting because our fp32 training model is also our val model
                 with torch.autocast(enabled=True, device_type='cuda', dtype=config.dtype):
                     model.do_qual_val(step_n=total_inds)
+                    model.do_qual_val(
+                        cond_img=batch['scanpath_sans_contents'][0], scanpath=batch['scanpaths'],
+                        step_n=total_inds+1)
                 val_loss = model.do_quant_val(val_dataloader, config.max_val_steps, config.dtype)
                 logging.info(f'{val_loss=:.4f}')
                 if total_inds // config.freq != 0:

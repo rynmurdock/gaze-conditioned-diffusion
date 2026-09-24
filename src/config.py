@@ -14,7 +14,7 @@ class Config:
     # model_path = None
     transformer_model_path = None
     lora_path = None
-    seed: int = 12
+    seed: int = 11
 
     #### seems consistently better to keep text encoder; use edit image
     remove_text_encoder: bool = False
@@ -25,24 +25,22 @@ class Config:
     lora_rank: int = 128
 
     # this overrides all else; samples a full trajectory instead of i/o pairs
-    sample_full_trajectory: bool = False
+    sample_full_trajectory: bool = True
 
     sample_teacher: bool = True
-
     just_inf_timesteps: bool = False
-    timestep_density_fn: str = 'logit_normal'
-
     # just_inf_timesteps will automatically already shift, 
-    #   so this does nothing if just_inf_timesteps=False
+    #   so this does nothing if just_inf_timesteps=False; same with sample_full_trajectory
     shift_timesteps_resolution: bool = True
+    timestep_density_fn: str = 'logit_normal'
     ####
 
     quantize_adam: bool = False
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 2
-    lr: float = 5e-5
+    batch_size: int = 1
+    lr: float = 1e-5
     use_prompt: str = 'The scene.'
 
     # teacher gives the input image back in most cases
@@ -56,7 +54,7 @@ class Config:
 
     # this seems to break after d5b46746eb7f329c793d65b76a09c96ef9bfdd97
     # likely due to dynamic shapes being borked on some torch versions
-    do_compile: bool = True
+    do_compile: bool = False
     device: str = 'cuda:0'
     
     # specifically for *mixed precision*

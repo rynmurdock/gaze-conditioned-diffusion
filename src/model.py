@@ -12,6 +12,13 @@ import bitsandbytes as bnb
 from peft import LoraConfig
 from torchvision.transforms import functional as TF
 
+@torch.no_grad()
+def unpack(pipe, latents, latent_height, latent_width, callback_kwargs): 
+    latents = pipe._unpack_latents_with_ids(latents, callback_kwargs['latent_ids'], latent_height // 2, latent_width // 2); return latents
+
+@torch.no_grad()
+def visualize_x0_callback_fn(pipe, i, timestep, callback_kwargs): 
+    print('here'); latent_height = 2 * (int(callback_kwargs['height']) // (pipe.vae_scale_factor * 2)); latent_width = 2 * (int(callback_kwargs['width']) // (pipe.vae_scale_factor * 2)); torch.set_grad_enabled(False); latents = unpack(pipe, callback_kwargs.get("latents"), latent_height, latent_width, callback_kwargs); model_output = unpack(pipe, callback_kwargs.get("noise_pred"), latent_height, latent_width, callback_kwargs);  x0 = latents - pipe.scheduler.sigmas[i] * model_output; print('x0:', x0.shape, pipe.vae.bn.running_mean.shape); latents_bn_mean = pipe.vae.bn.running_mean.view(1, -1, 1, 1).to(x0.device, x0.dtype); latents_bn_std = torch.sqrt(pipe.vae.bn.running_var.view(1, -1, 1, 1) + pipe.vae.config.batch_norm_eps).to(x0.device, x0.dtype); x0 = (x0 - latents_bn_mean) / latents_bn_std; image = pipe.vae.decode(pipe._unpatchify_latents(x0), return_dict=False)[0]; image = pipe.image_processor.postprocess(image, output_type='pil')[0]; image.save(f'{timestep}.png'); print(callback_kwargs, timestep, i); torch.set_grad_enabled(True); return callback_kwargs
 
 
 def ids_encode_pad_mask_images(model, images, dtype):
@@ -37,37 +44,15 @@ def ids_encode_pad_mask_images(model, images, dtype):
         latent_ids = torch.nn.utils.rnn.pad_sequence(latent_ids, batch_first=True).squeeze(1)
         return padded_latents, image_ids, latents_there_mask, latent_ids
 
-
-@torch.no_grad()
-def full_teacher_trajectory(model, x0, latent_image_ids, latents_there_mask):
-    model.pipe.transformer.disable_lora()
-
-    timesteps = get_inf_timesteps(model.noise_scheduler_copy, latents_there_mask, num_inference_steps=4, device='cuda',)
-    latents = torch.randn_like(x0)
-    teacher_latents_l = [latents]
-    teacher_preds = []
-
-    for t in range(timesteps.shape[1]):
-        latent_model_input = torch.cat([latents, x0], dim=1).to(model.pipe.transformer.dtype)
-        teacher_noise_pred = model(latent_model_input, 
-                    timesteps=timesteps[:, t, ], image_ids=latent_image_ids, 
-                    prompt_embeds=model.pipe.cached_teacher_prompt,
-                    txt_ids=model.pipe.cached_teacher_txt_ids,
-                    latents_attention_mask=latents_there_mask.repeat(1, 2, 1),
-                    )
-        teacher_noise_pred = teacher_noise_pred[:, : latents.size(1) :]
-        # would rather diffusers.step but it is a nightmare in there.
-        if t < timesteps.shape[1]-1:
-            t_a = timesteps[:, t+1]
-        else:
-            t_a = 0
-        latents = latents + (t_a/1000 - timesteps[:, t]/1000)[:, None, None,] * teacher_noise_pred
-
-        teacher_latents_l.append(latents)
-        teacher_x0s.append(latents - timesteps[:, t]/1000 * teacher_noise_pred)
-    
-    model.pipe.transformer.enable_lora()
-    return torch.stack(teacher_latents_l, 1), torch.stack(teacher_x0s, 1)
+        # with torch.autocast(device_type='cuda', ):
+        #     visualize_x0_callback_fn(model.pipe, t_ind, timesteps[:, t_ind], {
+        #         'height': hw[0],
+        #         'width': hw[1],
+        #         'latent': latents,
+        #         'latents': latents,
+        #         'noise_pred': teacher_noise_pred,
+        #         'latent_ids': latent_image_ids[:,:latent_image_ids.shape[1]//2],
+        #     })
 
 
 def get_loss(model, images, scanpaths, config, 
@@ -83,18 +68,22 @@ def get_loss(model, images, scanpaths, config,
         hint_latents, hint_ids, _, _ = ids_encode_pad_mask_images(model, 
                                                                     scanpath_sans_contents, model.config.dtype)
 
-        hint_drop_mask = torch.rand((x0.shape[0],)) < .2
+        hint_drop_mask = torch.rand((x0.shape[0],)) < .1
         hint_latents[hint_drop_mask] = 0
 
+        hw = (max([a.height for a in images]), max([a.width for a in images]))
         if config.sample_full_trajectory:
-            inputs, targets = full_teacher_trajectory(model, x0, teacher_latent_image_ids, 
-                                                                    latents_there_mask)
+            timesteps_set = get_inf_timesteps(model.noise_scheduler_copy, latents_there_mask, 
+                                    num_inference_steps=4, device='cuda',)
+            # appending zero timesteps
+            timesteps_set = torch.nn.functional.pad(timesteps_set, (0, 1))
+
         else:
             noise = torch.randn_like(x0)
             if config.just_inf_timesteps:
                 timesteps = get_inf_timesteps(model.noise_scheduler_copy, latents_there_mask, num_inference_steps=4, device='cuda',)
                 k = torch.randint(0, 4, (noise.shape[0],)).to(x0.device)
-                timesteps = timesteps[k]
+                timesteps = timesteps[torch.arange(noise.shape[0], device=x0.device), k]
             else:
                 u = compute_density_for_timestep_sampling(
                     weighting_scheme=config.timestep_density_fn if config.timestep_density_fn else 'logit_normal',
@@ -128,6 +117,10 @@ def get_loss(model, images, scanpaths, config,
                         )
                 teacher_noise_pred = teacher_noise_pred[:, : latents.size(1) :]
                 model.pipe.transformer.enable_lora()
+        
+            # our non-full set are going to have a single nfe
+            timesteps_set = timesteps[:, None]
+            
 
     grand_loss = 0
     with torch.autocast(device_type='cuda', enabled=not config.quantize_model, dtype=dtype):
@@ -138,32 +131,49 @@ def get_loss(model, images, scanpaths, config,
             f'Should not be equal: {hint_ids} == {typical_image_ids}'
         )
 
-        if not config.sample_full_trajectory:
-            if not sample_teacher:
-                inputs = latents[:, None]; targets = (noise - x0)[:, None]
+        for ind in range(timesteps_set.shape[1]):
+            if config.sample_full_trajectory:
+                if ind == 0: into = torch.randn_like(x0)
+                if ind == timesteps_set.shape[1]-1: continue
             else:
-                inputs = latents[:, None]; targets = teacher_noise_pred[:, None]
-
-        for ind in range(targets.shape[1]):
-            into = inputs[:, ind]; target = targets[:, ind]
+                into = inputs[:, ind]; target = targets[:, ind]
+                
             latent_model_input = torch.cat([into, hint_latents], dim=1).to(model.pipe.transformer.dtype)
             latent_image_ids = torch.cat([noisy_image_ids, hint_ids], dim=1)
 
-            if config.sample_full_trajectory:
-                timesteps_set = get_inf_timesteps(model.noise_scheduler_copy, latents_there_mask, num_inference_steps=4, device='cuda',)
-                timesteps = timesteps_set[:, ind,]
-
-            output = model(latent_model_input, 
-                        timesteps=timesteps, image_ids=latent_image_ids,
+            student_pred = model(latent_model_input, 
+                        timesteps=timesteps_set[:, ind,], image_ids=latent_image_ids,
                         prompt_embeds=model.pipe.cached_prompt,
                         txt_ids=model.pipe.cached_txt_ids,
                         latents_attention_mask=latents_there_mask.repeat(1, 2, 1),
                         )
-            output = output[:, : into.size(1) :]
+            student_pred = student_pred[:, : into.size(1) :]
 
-            # we do x0 weighting when we're going over full trajectories
             if config.sample_full_trajectory:
-                output = into - timesteps / 1000 * output
+                with torch.no_grad():
+                    model.pipe.transformer.disable_lora()
+                    latent_model_input = torch.cat([into, x0], dim=1).to(model.pipe.transformer.dtype)
+                    teacher_noise_pred = model(latent_model_input, 
+                                timesteps=timesteps_set[:, ind, ], image_ids=latent_image_ids, 
+                                prompt_embeds=model.pipe.cached_teacher_prompt,
+                                txt_ids=model.pipe.cached_teacher_txt_ids,
+                                latents_attention_mask=latents_there_mask.repeat(1, 2, 1),
+                                )
+                    teacher_noise_pred = teacher_noise_pred[:, : into.size(1) :]
+                    target = into - timesteps_set[:, ind, None, None,] / 1000 * teacher_noise_pred
+                    model.pipe.transformer.enable_lora()
+
+            # we do x0 parameterization when we're going over full trajectories
+            if config.sample_full_trajectory:
+                # would rather diffusers.step but it is a nightmare in there.
+                if ind < timesteps_set.shape[1]-1:
+                    t_a = timesteps_set[:, ind+1]
+                else:
+                    t_a = 0
+                # x0
+                output = into - timesteps_set[:, ind, None, None,] / 1000 * student_pred
+                # we step our latent
+                into = into + (t_a/1000 - timesteps_set[:, ind]/1000)[:, None, None,] * student_pred
 
             output = output.to(torch.float32)
             target = target.to(torch.float32)
@@ -171,9 +181,10 @@ def get_loss(model, images, scanpaths, config,
             # mask anywhere we don't have contents
             loss[~latents_there_mask] = 0
             # mean over batch last
-            loss = loss.flatten(1).sum(1) / latents_there_mask.sum()
+            loss = loss.flatten(1).sum(1) / latents_there_mask.flatten(1).sum(1)
             loss = loss.mean()
             grand_loss += loss
+        grand_loss = grand_loss / timesteps_set.shape[1]
 
     logging_dict = {'mse_loss': grand_loss.item(),}
     return grand_loss, logging_dict
@@ -274,12 +285,13 @@ class Zoo(torch.nn.Module):
         return image
 
     @torch.no_grad()
-    def do_qual_val(self, guidance_scale=1, im_n=0, step_n=None):
+    def do_qual_val(self, guidance_scale=2, im_n=0, step_n=None, cond_img=None, scanpath=None):
         latent_seed_generator = torch.Generator(device="cuda").manual_seed(self.seed)
         for ind, this_seed in enumerate([self.seed, self.seed+179]):
             scanpath_generator = torch.Generator(device="cuda").manual_seed(this_seed)
             width, height = self.config.resolution
-            cond_img, scanpath = get_random_scanpath_cond_im(width, height, 
+            if not cond_img:
+                cond_img, scanpath = get_random_scanpath_cond_im(width, height, 
                                                              generator=scanpath_generator)
             image = self.inference(cond_img, scanpath, guidance_scale, (width, height), latent_seed_generator)
             logging.info(f'Saving at {self.config.log_dir}/sans_scanpath-latest_val_{ind}_{im_n}.png')
@@ -339,7 +351,7 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
     target_modules = [
                 "to_q", "to_k", "to_v", "to_out.0",             # double-stream attention
                 "add_q_proj", "add_k_proj", "add_v_proj", "to_add_out",  # double-stream cross/context attention
-                "to_qkv_mlp_proj.0",                            # single-stream fused qkv+mlp-in
+                "to_qkv_mlp_proj",                              # single-stream fused qkv+mlp-in
                 "to_out.0",                                     # single-stream fused attn-out+mlp-out
             ]
     if config.lora_path:
