@@ -174,6 +174,7 @@ def get_loss(model, images, scanpaths, config,
                 output = into - timesteps_set[:, ind, None, None,] / 1000 * student_pred
                 # we step our latent
                 into = into + (t_a/1000 - timesteps_set[:, ind]/1000)[:, None, None,] * student_pred
+                into = into.detach()
 
             output = output.to(torch.float32)
             target = target.to(torch.float32)
