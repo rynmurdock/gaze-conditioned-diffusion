@@ -77,10 +77,10 @@ def plot_scores(scores,
 
 
 def run_eval(
-        path='/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/provincialization_Demopolis_Phiona/',
-        lora_path=f'/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/provincialization_Demopolis_Phiona/66000_ckpt/pytorch_lora_weights.safetensors',
+        path,
+        lora_path,
         n_samples=64,
-        guidance_scales=[3, 4, 5, 6],
+        guidance_scales=[1, 3, 7, 8, 11],
         step=None,
         job_n=None,
     ):
@@ -190,12 +190,11 @@ if __name__ == "__main__":
     from utils.eval_utils import get_dinoscore, get_lpips
 
     # path to lora
-    to_job = '''/root/gaze-conditioned-diffusion/logs/triplexity_Nelrsa_Varginha'''.splitlines()
-
+    to_job = '''logs/lr=1e-05_lora_rank=4_max_steps=10010_batch_size=2_use_prompt=The scene._teacher_use_prompt=_just_inf_timesteps=False_included_data_subsets=('OutdoorNatural',)_timestep_density_fn=logit_normal_shift_timesteps_resolution=False_sample_full_trajectory=True'''.splitlines()
 
     ckpts_to_scores = {}
     for jn, e in enumerate(to_job):
-        for step in [1250]:
+        for step in [8_000]:
             job_path, ckpt_step_path = e, f'{e}/{step}_ckpt/pytorch_lora_weights.safetensors'
             min_lpips, min_cmmd, max_dino = run_eval(job_path, ckpt_step_path, job_n=jn, step=step)
             ckpts_to_scores[ckpt_step_path] = {
@@ -204,4 +203,5 @@ if __name__ == "__main__":
                                     'min_cmmd': min_cmmd,
                                     }
         df = pd.DataFrame(ckpts_to_scores)
+        job_path = job_path.replace('_', '')
         df.to_csv(f'{job_path}_scores.csv')

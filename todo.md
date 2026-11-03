@@ -124,3 +124,12 @@ hparam sweep:
 [] cite Reben+Joel, cites for CMMD + lpips + dinoscore
 
 [] verify your timesteps make sense here
+
+
+so:
+[] - look at images of interest in art category (some are interesting)
+[] - collect own scanpaths on images of interest
+
+
+
+

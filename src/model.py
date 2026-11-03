@@ -190,16 +190,13 @@ def get_loss(model, images, scanpaths, config,
     logging_dict = {'mse_loss': grand_loss.item(),}
     return grand_loss, logging_dict
 
-def get_random_scanpath_cond_im(width, height, generator, ):
+def get_random_scanpath_cond_im(width, height, generator, n_foveations=12):
         scanpath_xw = torch.randint(0, width, 
-                                    (1, 12, 1), generator=generator, device='cuda')
+                                    (1, n_foveations, 1), generator=generator, device='cuda')
         scanpath_yh = torch.randint(0, height, 
-                                    (1, 12, 1), generator=generator, device='cuda')
+                                    (1, n_foveations, 1), generator=generator, device='cuda')
         scanpath = torch.cat([scanpath_xw, scanpath_yh], -1)
-        cond_img = scanpath_over_pil_image(scanpath[0], 
-                                           w=width, 
-                                           h=height, 
-                                           just_path=True)
+        cond_img = scanpath_over_pil_image(scanpath[0], w=width, h=height, just_path=True)
         return cond_img, scanpath
 
 
@@ -288,7 +285,7 @@ class Zoo(torch.nn.Module):
     @torch.no_grad()
     def do_qual_val(self, guidance_scale=2, im_n=0, step_n=None, cond_img=None, scanpath=None):
         latent_seed_generator = torch.Generator(device="cuda").manual_seed(self.seed)
-        for ind, this_seed in enumerate([self.seed, self.seed+179]):
+        for ind, this_seed in enumerate([self.seed, self.seed+1, self.seed+2]):
             scanpath_generator = torch.Generator(device="cuda").manual_seed(this_seed)
             width, height = self.config.resolution
             if not cond_img:
@@ -359,7 +356,8 @@ def get_model_and_tokenizer(path, device, dtype, seed, do_compile, config):
         transformer.load_lora_adapter(f'{config.lora_path}',
                                       prefix=None,
                                       adapter_name='default',
-                                      target_modules=target_modules
+                                      target_modules=target_modules,
+                                      use_safetensors=True,
                                       )
         transformer.set_adapters('default', 1)
     elif config.lora_rank:

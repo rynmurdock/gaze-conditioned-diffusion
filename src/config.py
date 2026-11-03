@@ -1,5 +1,5 @@
 import logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 import os
 import json
 import torch
@@ -13,8 +13,9 @@ class Config:
     ### Model
     # model_path = None
     transformer_model_path = None
-    lora_path = None
-    seed: int = 11
+    lora_path = '/home/ryn_mote/Misc/eye_experiments/gaze-conditioned-diffusion/logs/minoize_Xopher_Marella/12000_ckpt/'
+
+    seed: int = 14
 
     #### seems consistently better to keep text encoder; use edit image
     remove_text_encoder: bool = False
@@ -22,7 +23,7 @@ class Config:
     scanpath_as_edit_image: bool = True
     ####
 
-    lora_rank: int = 128
+    lora_rank: int = 16
 
     # this overrides all else; samples a full trajectory instead of i/o pairs
     sample_full_trajectory: bool = True
@@ -39,7 +40,7 @@ class Config:
     quantize_model: bool = False
 
     ### Hparams
-    batch_size: int = 8
+    batch_size: int = 2
     lr: float = 1e-5
     use_prompt: str = 'The scene.'
 
@@ -50,11 +51,11 @@ class Config:
     ### Training
     epochs: int = 3000000000000
     max_steps: int = 100_000
-    max_val_steps: int = 64
+    max_val_steps: int = 128
 
     # this seems to break after d5b46746eb7f329c793d65b76a09c96ef9bfdd97
     # likely due to dynamic shapes being borked on some torch versions
-    do_compile: bool = True
+    do_compile: bool = False
     device: str = 'cuda:0'
     
     # specifically for *mixed precision*
@@ -64,17 +65,20 @@ class Config:
 
     ### Data
     # TODO could un-invert intverted subset for addditional right-side-up data
-    included_data_subsets: tuple[str] = ('Art', 'Affective', 'Action',
-                                         'BlackWhite', 'Indoor',
-                                         'Inverted', 'OutdoorManMade', 'OutdoorNatural',
-                                         'Random', 'Social')
+    # only include these subsets
+    # included_data_subsets: tuple[str] = ('Art', 'Affective', 'Action',
+    #                                      'BlackWhite', 'Indoor',
+    #                                      'OutdoorManMade', 'OutdoorNatural',
+    #                                      'Random', 'Social')
+    included_data_subsets: tuple[str] = ('Art', 'Affective', 'BlackWhite',)
+    
     # we use this for excluding specific low-resolution samples in "Art" here
     excluded_data_subsets: tuple[str] = ('Art/035.jpg', 'Art/079.jpg', 
                                             'Art/111.jpg', 'Art/115.jpg')
 
     data_path: str = 'trainSet'
     val_data_split_ratio: int = .1
-    num_workers: int = 20
+    num_workers: int = 10
     # width & height side lengths
     resolution: tuple[int, int] = (768, 384)
     # whether to always simple-resize to the resolution (older ckpts did this)
@@ -83,7 +87,7 @@ class Config:
     ### Logging
     exp_name: str = None
     save_path: str = './'
-    freq: int = 50 # how often we save/log/etc.
+    freq: int = 1000 # how often we save/log/etc.
 
     def to_json(self, filename):
         # we don't want to mutate our actual class

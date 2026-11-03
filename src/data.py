@@ -33,7 +33,7 @@ def scanpath_over_pil_image(scanpath: np.array, pil_img=None, w=None, h=None,
     line_color: color for connecting lines; defaults to `color` if None.
     """
 
-    if just_path:
+    if just_path or not pil_img:
         im_size = pil_img.size if pil_img else (w, h)
         img = Image.new("RGBA", im_size, (255, 255, 255, 255))
     else:
